@@ -1,0 +1,37 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net48</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <UseWindowsForms>true</UseWindowsForms>
+    <LangVersion>7.3</LangVersion>
+    <RootNamespace>TSLauncher</RootNamespace>
+    <AssemblyName>TSLauncher</AssemblyName>
+    <ApplicationIcon>icon.ico</ApplicationIcon>
+    <StartupObject>TSLauncher.Program</StartupObject>
+    <!-- Assembly attributes live in Program.cs -->
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+    <!-- Window.xaml is loaded at runtime with XamlReader, not compiled as a Page -->
+    <EnableDefaultPageItems>false</EnableDefaultPageItems>
+    <EnableDefaultApplicationDefinition>false</EnableDefaultApplicationDefinition>
+    <Nullable>disable</Nullable>
+    <Deterministic>true</Deterministic>
+    <DebugType>none</DebugType>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="Window.xaml" LogicalName="Window.xaml" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Reference Include="Microsoft.VisualBasic" />
+    <Reference Include="System.Web.Extensions" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Lets `dotnet build` work even where the .NET Framework 4.8 developer pack isn't installed -->
+    <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.3" PrivateAssets="all" />
+  </ItemGroup>
+
+</Project>

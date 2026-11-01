@@ -1,0 +1,18 @@
+# Build output
+bin/
+obj/
+out/
+dist/
+*.user
+.vs/
+
+# Personal launcher data - never commit (contains your SteamGridDB API key and play history)
+launcher-settings.json*
+playtime.json*
+sessions.csv
+tracking.log*
+logs/
+backups/
+
+# Downloaded artwork belongs to its SteamGridDB artists
+covers/
