@@ -44,7 +44,9 @@ Open `src/TSLauncher.csproj` in Visual Studio 2022, or with the .NET SDK install
 dotnet build src/TSLauncher.csproj -c Release -o out
 ```
 
-The output is a single `TSLauncher.exe` (C#, WPF, targeting .NET Framework 4.8). Every push is built on Windows by GitHub Actions; pushing a `v*` tag publishes a release.
+The output is a single `TSLauncher.exe` (C#, WPF, targeting .NET Framework 4.8). Every push is built on Windows by GitHub Actions.
+
+To release a new version, bump `AssemblyVersion` / `AssemblyFileVersion` (and `AppInfo.Version`) in the source, add an entry to `CHANGELOG.md` and push to `main`: the workflow tags it and publishes the release automatically.
 
 | Source | Purpose |
 |---|---|
