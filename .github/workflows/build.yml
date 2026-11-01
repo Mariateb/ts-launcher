@@ -18,9 +18,9 @@ jobs:
   build:
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@v5
         with:
           dotnet-version: '8.0.x'
 
@@ -37,6 +37,7 @@ jobs:
           $exists = if ($LASTEXITCODE -eq 0) { 'true' } else { 'false' }
           "exists=$exists" >> $env:GITHUB_OUTPUT
           Write-Host "Version $v, release exists: $exists"
+          exit 0   # "gh release view" failing just means "no release yet"
 
       - name: Build
         run: dotnet build src/TSLauncher.csproj -c Release -o out
