@@ -1,0 +1,37 @@
+name: Move release tags (one-off)
+
+# Points each release tag at the matching commit of the rewritten history.
+# Runs once, then this file is deleted.
+on:
+  push:
+    branches: [ main ]
+    paths: [ '.github/workflows/retag.yml' ]
+
+permissions:
+  contents: write
+
+jobs:
+  retag:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - name: Move tags
+        run: |
+          set -e
+          git config user.name "github-actions"
+          git config user.email "github-actions@users.noreply.github.com"
+          while read -r tag sha; do
+            [ -z "$tag" ] && continue
+            git cat-file -e "$sha^{commit}"
+            git tag -f "$tag" "$sha"
+            git push -f origin "refs/tags/$tag"
+            echo "$tag -> $sha"
+          done <<'MAP'
+          v1.0.0 e96f509d9cb5c7211a6cff57b34a46b995217d9b
+          v1.1.0 095d6c05bb78267b080752b7d0118746bf6e22f1
+          v1.2.0 0c44801578c059ea2120748d976acd9d004ac555
+          v1.2.1 dc70a46de315658e46db3b3aaa59b44fccfa709d
+          v1.3.0 3b7cd4a368a992f108696f0073f4785eae8f06e3
+          MAP
