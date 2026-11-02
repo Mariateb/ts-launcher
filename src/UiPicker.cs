@@ -105,6 +105,19 @@ namespace TSLauncher
             var code = l.Code;
             btn.Click += (s, e) => Safe("play", () => LaunchLang(code));
             btn.GotKeyboardFocus += (s, e) => langSel = langButtons.IndexOf(btn);
+            if (!SafeMode)
+            {
+                var menu = new ContextMenu();
+                Action<string, Action> item = (header, act) => { var mi = new MenuItem { Header = header }; mi.Click += (s, e) => Safe("languages", act); menu.Items.Add(mi); };
+                item("Only show in this game", () => SetLangGames(code, new[] { current.Id }, current));
+                item("Don't show in this game", () => SetLangGames(code, Lib.Games.Select(x => x.Id).Where(id => id != current.Id), current));
+                item("Choose games…", () => ChooseLangGames(code, current));
+                menu.Items.Add(new Separator());
+                item("Rename…", () => { RenameLang(code); if (current != null) ShowPicker(current); });
+                item("Hide everywhere", () => { var g = current; S.HiddenLangs.Add(code); S.Save(); HidePicker(true); Reload(() => { if (g != null) { var fresh = Lib.Games.FirstOrDefault(x => x.Id == g.Id); if (fresh != null) ShowPicker(fresh); } }); });
+                btn.ContextMenu = menu;
+                btn.ToolTip = (btn.ToolTip as string) + "\nRight-click: choose which games show this language";
+            }
             return btn;
         }
 

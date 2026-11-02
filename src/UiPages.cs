@@ -295,18 +295,27 @@ namespace TSLauncher
                 bool renamed = S.LangNames.TryGetValue(info.Code, out custom) && !string.IsNullOrWhiteSpace(custom);
                 var desc = new List<string> { info.Code };
                 if (renamed) desc.Add("automatic name: " + Langs.AutoLabel(info.Code));
-                desc.Add(info.Hidden ? "hidden" : "in " + Fmt.Plural(info.Games, "game", "games"));
+                if (info.Hidden) desc.Add("hidden");
+                else if (info.OnlyFor != null)
+                {
+                    var names = info.OnlyFor.OrderBy(Catalog.Number).Select(id => Catalog.Has(id) ? Catalog.Short(id) : id).ToList();
+                    desc.Add("only in " + (names.Count <= 4 ? string.Join(", ", names) : Fmt.Plural(names.Count, "game", "games")));
+                }
+                else desc.Add("in " + Fmt.Plural(info.Games, "game", "games") + " (all)");
                 if (info.Config == null) desc.Add("from shortcuts only");
 
                 var rename = FlatBtn("Rename…", () => RenameLang(info.Code));
+                var games = FlatBtn("Games…", () => ChooseLangGames(info.Code, null));
+                games.IsEnabled = !SafeMode && Lib.Games.Count > 0;
                 var hide = FlatBtn(info.Hidden ? "Show" : "Hide", () => ToggleLangHidden(info.Code));
                 var del = FlatBtn("Delete…", () => DeleteLang(info));
                 rename.IsEnabled = hide.IsEnabled = !SafeMode;
+                games.ToolTip = "Choose which games offer this language (for a patch made for one game only)";
                 del.IsEnabled = !SafeMode && info.Config != null && File.Exists(info.Config);
                 if (info.Config == null) del.ToolTip = "This language comes from shortcuts, not from a thcrap configuration.";
 
                 var title = Langs.Label(info.Code) + (info.Hidden ? "   (hidden)" : "");
-                SettingRow(title, string.Join("   ·   ", desc), rename, hide, del);
+                SettingRow(title, string.Join("   ·   ", desc), games, rename, hide, del);
                 if (info.Hidden)
                 {
                     var row = (Border)StatsPanel.Children[StatsPanel.Children.Count - 1];
@@ -354,6 +363,78 @@ namespace TSLauncher
             v = v.Trim();
             if (v.Length == 0 || v == Langs.AutoLabel(code)) S.LangNames.Remove(code); else S.LangNames[code] = v;
             ApplyLangNames();
+        }
+
+        /// <summary>ids null or covering every game = no restriction. Reopens 'reopen' in the game window afterwards.</summary>
+        void SetLangGames(string code, IEnumerable<string> ids, Game reopen)
+        {
+            var set = ids == null ? null : new HashSet<string>(ids, StringComparer.OrdinalIgnoreCase);
+            bool all = set == null || Lib.Games.All(g => set.Contains(g.Id));
+            if (all) S.LangGames.Remove(code); else S.LangGames[code] = set;
+            S.Save();
+            Sounds.Play("toggle");
+            if (reopen != null) HidePicker(true);
+            Reload(() =>
+            {
+                if (reopen == null) return;
+                var fresh = Lib.Games.FirstOrDefault(x => x.Id == reopen.Id);
+                if (fresh != null) ShowPicker(fresh);
+            });
+            if (set != null && set.Count == 0) StatusText.Text = Langs.Label(code) + " isn't offered in any game now (Settings > Languages to change it).";
+        }
+
+        void ChooseLangGames(string code, Game reopen)
+        {
+            HashSet<string> current;
+            S.LangGames.TryGetValue(code, out current);
+            var dlg = new Window
+            {
+                Title = "Games for " + Langs.Label(code), Owner = W, WindowStartupLocation = WindowStartupLocation.CenterOwner,
+                Width = 460, SizeToContent = SizeToContent.Height, MaxHeight = Math.Max(400, W.ActualHeight - 60), ResizeMode = ResizeMode.NoResize,
+                Background = Br("#191A2E"), ShowInTaskbar = false, FontFamily = new FontFamily("Segoe UI"),
+            };
+            var root = new DockPanel { Margin = Th(22, 18, 22, 18) };
+            var head = new StackPanel();
+            head.Children.Add(TB(Langs.Label(code), 20, "#F0EEF8", FontWeights.SemiBold));
+            var sub = TB("Choose the games that offer this language. Useful for a patch made for one game only.", 12, "#8E8CA6");
+            sub.TextWrapping = TextWrapping.Wrap; sub.Margin = Th(0, 4, 0, 12);
+            head.Children.Add(sub);
+            var allBox = new CheckBox { IsChecked = current == null, Margin = Th(0, 0, 0, 10), Content = TB("All games (also new ones)", 14, "#F0EEF8", FontWeights.SemiBold) };
+            head.Children.Add(allBox);
+            DockPanel.SetDock(head, Dock.Top);
+            root.Children.Add(head);
+
+            var buttons = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = Th(0, 14, 0, 0) };
+            DockPanel.SetDock(buttons, Dock.Bottom);
+            root.Children.Add(buttons);
+
+            var list = new StackPanel();
+            var boxes = new List<CheckBox>();
+            foreach (var g in Lib.Games)
+            {
+                var cb = new CheckBox
+                {
+                    Tag = g.Id, Margin = Th(0, 0, 0, 7), IsChecked = current == null || current.Contains(g.Id),
+                    Content = TB("Touhou " + g.NumText + "   " + g.Title, 13, "#D2D0E6"),
+                };
+                boxes.Add(cb);
+                list.Children.Add(cb);
+            }
+            Action sync = () => { foreach (var b in boxes) b.IsEnabled = !(allBox.IsChecked ?? false); };
+            allBox.Click += (s, e) => { if (allBox.IsChecked ?? false) foreach (var b in boxes) b.IsChecked = true; sync(); };
+            sync();
+            root.Children.Add(new ScrollViewer { Content = list, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, MaxHeight = 420 });
+
+            var cancel = new Button { Content = "Cancel", Style = (Style)W.FindResource("FlatBtn"), IsCancel = true };
+            var save = new Button { Content = "Save", Style = (Style)W.FindResource("AccentBtn"), IsDefault = true, Margin = Th(10, 0, 0, 0), Padding = Th(22, 8, 22, 8) };
+            bool ok = false;
+            save.Click += (s, e) => { ok = true; dlg.Close(); };
+            buttons.Children.Add(cancel); buttons.Children.Add(save);
+            dlg.Content = root;
+            dlg.ShowDialog();
+            if (!ok) return;
+            if (allBox.IsChecked ?? false) SetLangGames(code, null, reopen);
+            else SetLangGames(code, boxes.Where(b => b.IsChecked ?? false).Select(b => (string)b.Tag), reopen);
         }
 
         void ToggleLangHidden(string code)
@@ -414,7 +495,8 @@ namespace TSLauncher
             Section("The basics");
             Para("TS Launcher reads your thcrap setup. Every game thcrap knows about shows up here, and every configuration you made in thcrap (en, fr, en-lol...) becomes a language you can pick. Games found through Steam are labelled \"Steam\", the others \"Folder\".");
             Para("A game is missing? Open thcrap, let it search for games (or point it to the game's folder), then use Refresh in Settings. A language is missing? Settings > Languages > Open thcrap: create a configuration with the patches you want, and it appears in every game when you come back.");
-            Para("Settings > Languages also lets you give a language a friendlier name (for example \"French (TSA)\" instead of base_tsa-MoFrance), hide the ones you don't use, or delete a configuration (it goes to the Recycle Bin).");
+            Para("Settings > Languages also lets you give a language a friendlier name (for example \"French (TSA)\" instead of base_tsa-MoFrance), choose which games offer it (Games…, handy for a patch made for one game only), hide the ones you don't use, or delete a configuration (it goes to the Recycle Bin).");
+            Para("Quicker: right-click a language in a game's window and choose \"Only show in this game\" or \"Don't show in this game\".");
             Para("The filters above your games (Played, Never played, Steam, Folder) narrow the library down; All shows everything again.");
 
             Section("Playing");

@@ -38,6 +38,7 @@ namespace TSLauncher
         public string Code, Config;   // Config is null for shortcut-only languages
         public int Games;
         public bool Hidden;
+        public HashSet<string> OnlyFor;   // null = every game
     }
 
     public sealed class LibraryResult
@@ -140,7 +141,7 @@ namespace TSLauncher
         }
 
         /// <summary>Scans everything (runs on a background thread).</summary>
-        public static LibraryResult Build(ThcrapInfo thc, string root, ICollection<string> hidden = null)
+        public static LibraryResult Build(ThcrapInfo thc, string root, ICollection<string> hidden = null, IDictionary<string, HashSet<string>> onlyFor = null)
         {
             var r = new LibraryResult { Thcrap = thc };
             if (thc == null) return r;
@@ -197,6 +198,11 @@ namespace TSLauncher
                 if (s.Custom) l.CustomShortcut = s.Path; else l.Shortcut = s.Path;
             }
 
+            // Languages limited to some games (e.g. a translation made for one game only).
+            if (onlyFor != null && onlyFor.Count > 0)
+                foreach (var g in games.Values)
+                    g.Langs.RemoveAll(l => { HashSet<string> ids; return onlyFor.TryGetValue(l.Code, out ids) && ids.Count > 0 && !ids.Contains(g.Id); });
+
             // Inventory of every language (for the language manager), then drop the hidden ones.
             var inv = new Dictionary<string, LangInfo>(StringComparer.OrdinalIgnoreCase);
             foreach (var c in configs) inv[c.Key] = new LangInfo { Code = c.Key, Config = c.Value };
@@ -207,7 +213,12 @@ namespace TSLauncher
                     if (!inv.TryGetValue(l.Code, out li)) { li = new LangInfo { Code = l.Code, Config = l.Config }; inv[l.Code] = li; }
                     li.Games++;
                 }
-            foreach (var li in inv.Values) li.Hidden = hidden != null && hidden.Contains(li.Code);
+            foreach (var li in inv.Values)
+            {
+                li.Hidden = hidden != null && hidden.Contains(li.Code);
+                HashSet<string> ids;
+                if (onlyFor != null && onlyFor.TryGetValue(li.Code, out ids) && ids.Count > 0) li.OnlyFor = ids;
+            }
             r.AllLangs = inv.Values.OrderBy(x => x.Code, StringComparer.OrdinalIgnoreCase).ToList();
             r.ConfigCount = r.AllLangs.Count(x => !x.Hidden && x.Config != null);
             if (hidden != null && hidden.Count > 0)

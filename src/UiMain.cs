@@ -227,10 +227,11 @@ namespace TSLauncher
             int version = ++reloadVersion;
             string saved = S.ThcrapPath, root = Paths.Root;
             var hidden = new HashSet<string>(S.HiddenLangs, StringComparer.OrdinalIgnoreCase);
+            var onlyFor = S.LangGames.ToDictionary(kv => kv.Key, kv => new HashSet<string>(kv.Value), StringComparer.OrdinalIgnoreCase);
             Task.Run(() =>
             {
                 var thc = Library.Find(saved, root);
-                return Library.Build(thc, root, hidden);
+                return Library.Build(thc, root, hidden, onlyFor);
             }).ContinueWith(t =>
             {
                 if (version != reloadVersion) return;

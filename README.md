@@ -11,7 +11,7 @@ A game launcher for the Touhou Project games patched with [thcrap](https://www.t
 - **Save backups**: `score.dat` is copied when a game starts and when it closes (last 10 versions), restorable in two clicks.
 - **Replay browser** that reads difficulty, character, result and score from Touhou 10+ replays; rename, back up, delete, import.
 - **Favorites, sorting, search and quick filters** (played, never played, Steam, folder), optional cards for the games you don't own yet.
-- **Language manager**: give configurations friendly names, hide or delete the ones you don't use, open thcrap to add more.
+- **Language manager**: give configurations friendly names, choose which games offer each one (a patch made for one game stays on that game), hide or delete the ones you don't use, open thcrap to add more.
 - **Updates in one click**: a notice appears when a new release is out, and TS Launcher replaces itself and restarts.
 - **Remembers its window** size, position and maximized state.
 - **Keyboard and Xbox controller navigation**, menu sounds, accent themes (including one that follows each game's colour).

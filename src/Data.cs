@@ -30,6 +30,8 @@ namespace TSLauncher
         public bool SetupDone;
         public Dictionary<string, string> LangNames = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         public HashSet<string> HiddenLangs = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        /// <summary>Language code -> the only games it is offered for (no entry = every game).</summary>
+        public Dictionary<string, HashSet<string>> LangGames = new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase);
         public string Filter = "all";
         public double? WinLeft, WinTop, WinWidth, WinHeight;
         public bool WinMaximized;
@@ -78,6 +80,11 @@ namespace TSLauncher
             s.SetupDone = Json.Bool(j, "SetupDone") ?? true;
             foreach (var kv in Dict(j, "LangNames")) if (kv.Value != null) s.LangNames[kv.Key] = Convert.ToString(kv.Value, CultureInfo.InvariantCulture);
             foreach (var kv in Dict(j, "HiddenLangs")) if (kv.Value is bool && (bool)kv.Value) s.HiddenLangs.Add(kv.Key);
+            foreach (var kv in Dict(j, "LangGames"))
+            {
+                var ids = new HashSet<string>(Json.Arr(kv.Value).Where(x => x != null).Select(x => Convert.ToString(x, CultureInfo.InvariantCulture).ToLowerInvariant()));
+                if (ids.Count > 0) s.LangGames[kv.Key] = ids;
+            }
             var filter = Json.Str(j, "Filter");
             if (filter == "all" || filter == "played" || filter == "never" || filter == "steam" || filter == "folder") s.Filter = filter;
             var win = Json.Obj(Json.Get(j, "Window"));
@@ -122,6 +129,7 @@ namespace TSLauncher
                     { "SetupDone", SetupDone },
                     { "LangNames", new SortedDictionary<string, string>(LangNames, StringComparer.OrdinalIgnoreCase) },
                     { "HiddenLangs", HiddenLangs.OrderBy(x => x).ToDictionary(x => x, x => true) },
+                    { "LangGames", new SortedDictionary<string, List<string>>(LangGames.Where(kv => kv.Value.Count > 0).ToDictionary(kv => kv.Key, kv => kv.Value.OrderBy(x => x).ToList()), StringComparer.OrdinalIgnoreCase) },
                     { "Filter", Filter },
                     { "CheckUpdates", CheckUpdates },
                 };

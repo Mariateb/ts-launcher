@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.2.0 — 2026-11-02
+
+- **Languages per game**: choose which games offer each language, for patches made for one game only (like a Mountain of Faith–only translation).
+  - In a game's window, right-click a language: *Only show in this game*, *Don't show in this game*, *Choose games…*, *Rename…*, *Hide everywhere*.
+  - In Settings > Languages, the new *Games…* button opens a checklist, with *All games* to undo it.
+
 ## 1.1.0 — 2026-11-02
 
 - **Language manager** (Settings > Languages): rename how a language appears, hide the ones you don't use, delete a thcrap configuration (Recycle Bin), and open thcrap to add new ones; the library refreshes when you come back.
