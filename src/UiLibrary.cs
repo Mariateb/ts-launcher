@@ -381,6 +381,55 @@ namespace TSLauncher
             ApplyFilter();
         }
 
+        // ---------------------------------------------------------------- quick filters
+        static readonly string[] FilterKeys = { "all", "played", "never", "steam", "folder" };
+        static readonly Dictionary<string, string> FilterNames = new Dictionary<string, string>
+        {
+            { "all", "All" }, { "played", "Played" }, { "never", "Never played" }, { "steam", "Steam" }, { "folder", "Folder" },
+        };
+        readonly Dictionary<string, Button> filterChips = new Dictionary<string, Button>();
+
+        void BuildFilterChips()
+        {
+            var bar = SortBtn.Parent as Panel;
+            if (bar == null) return;
+            var chips = new StackPanel { Orientation = Orientation.Horizontal, Margin = Th(0, 0, 14, 0), VerticalAlignment = VerticalAlignment.Center };
+            foreach (var k in FilterKeys)
+            {
+                var key = k;
+                var b = new Button { Content = FilterNames[key], Style = (Style)W.FindResource("FlatBtn"), Padding = Th(12, 5, 12, 5), Margin = Th(0, 0, 6, 0), FontSize = 12, Focusable = false };
+                b.Click += (s, e) => { S.Filter = key; S.Save(); Sounds.Play("toggle"); UpdateFilterChips(); ApplyFilter(); };
+                chips.Children.Add(b);
+                filterChips[key] = b;
+            }
+            bar.Children.Insert(0, chips);
+            UpdateFilterChips();
+        }
+
+        void UpdateFilterChips()
+        {
+            if (S == null || string.IsNullOrEmpty(accentHex)) return;
+            foreach (var kv in filterChips)
+            {
+                bool on = kv.Key == (S.Filter ?? "all");
+                kv.Value.Background = Br(on ? accentHex : "#272A44");
+                kv.Value.BorderBrush = Br(on ? accentLightHex : "#383C5E");
+                kv.Value.Foreground = Br(on ? "#FFFFFF" : "#D2D0E6");
+            }
+        }
+
+        bool PassesFilter(Game g)
+        {
+            switch (S.Filter ?? "all")
+            {
+                case "played": { var st = Stats.Get(g.Id); return !g.Unowned && st != null && st.Played; }
+                case "never": { var st = Stats.Get(g.Id); return !g.Unowned && (st == null || !st.Played); }
+                case "steam": return !g.Unowned && g.Source == "Steam";
+                case "folder": return !g.Unowned && g.Source == "Folder";
+                default: return true;
+            }
+        }
+
         void ApplyFilter()
         {
             var q = SearchBox.Text.Trim();
@@ -398,6 +447,7 @@ namespace TSLauncher
                     var hay = g.Id + " touhou " + g.NumText + " " + info;
                     show = hay.IndexOf(q, StringComparison.OrdinalIgnoreCase) >= 0;
                 }
+                show = show && PassesFilter(g);
                 card.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
                 if (show) { if (g.Unowned) shownUnowned++; else shown++; }
             }
@@ -410,6 +460,7 @@ namespace TSLauncher
             if (selCard != null && selCard.Visibility != Visibility.Visible) SetSelection(null);
             var label = q.Length > 0 ? Fmt.Plural(shown, "result", "results") + " for \"" + q + "\"" : Fmt.Plural(shown, "game", "games");
             if (shownUnowned > 0) label += "  ·  " + shownUnowned + " not owned";
+            if ((S.Filter ?? "all") != "all") label += "  ·  showing " + FilterNames[S.Filter].ToLowerInvariant();
             if (Lib.Thcrap == null && q.Length == 0) label = "No games yet: TS Launcher needs to know where thcrap is (Settings > Library).";
             LibLabel.Text = label;
         }
@@ -429,6 +480,7 @@ namespace TSLauncher
             cards[g.Id] = fresh;
             if (old != null && selCard == old) { selCard = null; SetSelection(fresh); }
             if (!g.Unowned) UpdateContinue();
+            if ((S.Filter ?? "all") != "all") ApplyFilter();   // e.g. a first launch moves it out of "Never played"
         }
 
         void ShowSortMenu()

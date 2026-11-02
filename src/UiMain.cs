@@ -104,6 +104,7 @@ namespace TSLauncher
                 string ignored;
                 var real = AppSettings.Load(out ignored);   // read (never write) just enough to find games
                 S.ThcrapPath = real.ThcrapPath; S.LastLang = real.LastLang;
+                S.LangNames = real.LangNames; S.HiddenLangs = real.HiddenLangs;
                 Stats.ReadOnly = true; SessionLog.ReadOnly = true;
             }
             else
@@ -112,6 +113,8 @@ namespace TSLauncher
                 S = AppSettings.Load(out settingsNotice);
             }
             Stats.Load();
+            Langs.Custom = new Dictionary<string, string>(S.LangNames, StringComparer.OrdinalIgnoreCase);
+            Updater.CleanupOld();
             Sounds.Enabled = S.SoundsOn && !SafeMode;
             if (!SafeMode) Task.Run(() => Sounds.Init(S.SoundVolume));
 
@@ -126,7 +129,9 @@ namespace TSLauncher
             else if (settingsNotice != null) ShowNotice(settingsNotice, null, null);
             else if (Stats.Notice != null) ShowNotice(Stats.Notice, null, null);
 
+            RestoreWindow();
             W.Show();
+            if (S.WinMaximized && !SafeMode) W.WindowState = WindowState.Maximized;
             StatusText.Text = "Loading your games…";
             W.ContentRendered += (s, e) => Program.StartupSucceeded();
             Reload(() =>
@@ -134,7 +139,84 @@ namespace TSLauncher
                 FollowGameTheme(continueGame);
                 if (!SafeMode && !S.SetupDone) ShowSetup();
                 else if (!SafeMode) StartCoverDownload(false, true);
+                if (!SafeMode && S.CheckUpdates) CheckForUpdate(false);
             });
+        }
+
+        // ---------------------------------------------------------------- window position
+        /// <summary>Reopens where it was left, as long as that spot is still on a screen.</summary>
+        void RestoreWindow()
+        {
+            if (SafeMode || S.WinWidth == null || S.WinHeight == null || S.WinLeft == null || S.WinTop == null) return;
+            double w = Math.Max(W.MinWidth, S.WinWidth.Value), h = Math.Max(W.MinHeight, S.WinHeight.Value);
+            double vl = SystemParameters.VirtualScreenLeft, vt = SystemParameters.VirtualScreenTop;
+            double vw = SystemParameters.VirtualScreenWidth, vh = SystemParameters.VirtualScreenHeight;
+            double l = S.WinLeft.Value, t = S.WinTop.Value;
+            // the title bar must be reachable: at least 120 px of it inside the desktop
+            bool visible = l + w - 120 > vl && l + 120 < vl + vw && t >= vt - 10 && t + 40 < vt + vh;
+            if (!visible) return;
+            W.WindowStartupLocation = WindowStartupLocation.Manual;
+            W.Left = l; W.Top = t; W.Width = Math.Min(w, vw); W.Height = Math.Min(h, vh);
+        }
+
+        void SaveWindow()
+        {
+            if (SafeMode || !W.IsLoaded) return;
+            var r = W.WindowState == WindowState.Normal ? new Rect(W.Left, W.Top, W.ActualWidth, W.ActualHeight) : W.RestoreBounds;
+            if (r.IsEmpty || r.Width < 100 || r.Height < 100) return;
+            S.WinLeft = r.Left; S.WinTop = r.Top; S.WinWidth = r.Width; S.WinHeight = r.Height;
+            S.WinMaximized = W.WindowState == WindowState.Maximized;
+            S.Save();
+        }
+
+        // ---------------------------------------------------------------- updates
+
+        void CheckForUpdate(bool manual)
+        {
+            if (manual) StatusText.Text = "Checking for updates…";
+            Task.Run(() => Updater.Check()).ContinueWith(t =>
+            {
+                var info = t.Result;
+                if (info == null)
+                {
+                    if (manual) { StatusText.Text = "TS Launcher is up to date (" + AppInfo.Version + ")."; MessageBox.Show(W, "You have the latest version (" + AppInfo.Version + ").", AppInfo.Name); }
+                    return;
+                }
+
+                ShowNotice("TS Launcher " + info.VersionText + " is available (you have " + AppInfo.Version + ").", "Update now…", () => InstallUpdate(info));
+                if (manual) InstallUpdate(info);
+            }, TaskScheduler.FromCurrentSynchronizationContext());
+        }
+
+        void InstallUpdate(UpdateInfo info)
+        {
+            if (Track.Sessions.Count > 0) { ShowError("Close your game first: updating restarts TS Launcher, which would stop the play-time count."); return; }
+            var notes = (info.Notes ?? "").Trim();
+            if (notes.Length > 900) notes = notes.Substring(0, 900).TrimEnd() + "…";
+            var msg = "Update TS Launcher to " + info.VersionText + "?\n\n" + (notes.Length > 0 ? "What's new:\n" + notes + "\n\n" : "") +
+                      "It downloads from GitHub, replaces TSLauncher.exe and restarts. Your settings and play time are kept.";
+            if (MessageBox.Show(W, msg, AppInfo.Name + " update", MessageBoxButton.YesNo, MessageBoxImage.Information) != MessageBoxResult.Yes) return;
+            StatusText.Text = "Downloading TS Launcher " + info.VersionText + "…";
+            NoticeBar.Visibility = Visibility.Collapsed;
+            W.Cursor = Cursors.Wait;
+            Task.Run(() => Updater.Install(info)).ContinueWith(t =>
+            {
+                W.Cursor = null;
+                if (t.IsFaulted)
+                {
+                    var ex = t.Exception.GetBaseException();
+                    Log.Error("update", ex);
+                    if (MessageBox.Show(W, "The update couldn't be installed:\n" + ex.Message + "\n\nOpen the download page to update by hand?", AppInfo.Name,
+                        MessageBoxButton.YesNo, MessageBoxImage.Warning) == MessageBoxResult.Yes)
+                        try { Process.Start(info.PageUrl ?? Updater.ReleasesPage); } catch { }
+                    StatusText.Text = "Update failed (see logs).";
+                    return;
+                }
+                SaveWindow();
+                S.Save();
+                if (tray != null) { tray.Visible = false; tray.Dispose(); tray = null; }
+                Program.Restart(false);
+            }, TaskScheduler.FromCurrentSynchronizationContext());
         }
 
         int reloadVersion;
@@ -144,10 +226,11 @@ namespace TSLauncher
         {
             int version = ++reloadVersion;
             string saved = S.ThcrapPath, root = Paths.Root;
+            var hidden = new HashSet<string>(S.HiddenLangs, StringComparer.OrdinalIgnoreCase);
             Task.Run(() =>
             {
                 var thc = Library.Find(saved, root);
-                return Library.Build(thc, root);
+                return Library.Build(thc, root, hidden);
             }).ContinueWith(t =>
             {
                 if (version != reloadVersion) return;
@@ -163,8 +246,14 @@ namespace TSLauncher
 
         // ---------------------------------------------------------------- notices
         Action noticeAction;
+        readonly Queue<Action> queuedNotices = new Queue<Action>();
         void ShowNotice(string text, string action, Action onAction)
         {
+            if (NoticeBar.Visibility == Visibility.Visible && NoticeText.Text != text)
+            {
+                queuedNotices.Enqueue(() => ShowNotice(text, action, onAction));
+                return;
+            }
             NoticeText.Text = text;
             noticeAction = onAction;
             NoticeAction.Visibility = action != null ? Visibility.Visible : Visibility.Collapsed;
@@ -284,6 +373,7 @@ namespace TSLauncher
             SearchBox.CaretBrush = new SolidColorBrush(light);
             BottomHint.Foreground = new SolidColorBrush(light);
             UpdateViewButtons();
+            UpdateFilterChips();
         }
 
         static void AnimateColor(GradientStop stop, Color to)
@@ -384,12 +474,17 @@ namespace TSLauncher
         // ---------------------------------------------------------------- wiring
         void WireUp()
         {
-            NoticeClose.Click += (s, e) => NoticeBar.Visibility = Visibility.Collapsed;
+            NoticeClose.Click += (s, e) =>
+            {
+                NoticeBar.Visibility = Visibility.Collapsed;
+                if (queuedNotices.Count > 0) queuedNotices.Dequeue()();
+            };
             NoticeAction.Click += (s, e) => { if (noticeAction != null) Safe("notice", noticeAction); };
             SearchBox.TextChanged += (s, e) => { ApplyFilter(); UpdateContinue(); };
             SearchBox.GotKeyboardFocus += (s, e) => SearchLine.Opacity = 1;
             SearchBox.LostKeyboardFocus += (s, e) => SearchLine.Opacity = 0.45;
             SortBtn.Click += (s, e) => ShowSortMenu();
+            BuildFilterChips();
             foreach (var b in new[] { HomeBtn, StatsBtn, SettingsBtn, HelpBtn })
             {
                 var btn = b;
@@ -426,8 +521,15 @@ namespace TSLauncher
             {
                 if (!reallyClose && Track.Sessions.Count > 0) { e.Cancel = true; EnterTray(); }
             };
+            W.Activated += (s, e) =>
+            {
+                if (!thcrapOpened) return;
+                thcrapOpened = false;
+                Reload(() => StatusText.Text += "  ·  refreshed after thcrap");
+            };
             W.Closed += (s, e) =>
             {
+                SaveWindow();
                 S.Save();
                 if (tray != null) { tray.Visible = false; tray.Dispose(); }
                 Application.Current.Shutdown();
@@ -626,6 +728,7 @@ namespace TSLauncher
                 tray.ContextMenuStrip = menu;
             }
             exitWhenIdle = true;
+            SaveWindow();
             tray.Visible = true;
             W.Hide();
             UpdateNowPlaying();

@@ -10,7 +10,10 @@ A game launcher for the Touhou Project games patched with [thcrap](https://www.t
 - **Play time tracking** that follows thcrap's loader and Steam relaunches, a "Now playing" bar, hiding in the tray while you play, a stats page with weekly charts and session history.
 - **Save backups**: `score.dat` is copied when a game starts and when it closes (last 10 versions), restorable in two clicks.
 - **Replay browser** that reads difficulty, character, result and score from Touhou 10+ replays; rename, back up, delete, import.
-- **Favorites, sorting, search**, optional cards for the games you don't own yet.
+- **Favorites, sorting, search and quick filters** (played, never played, Steam, folder), optional cards for the games you don't own yet.
+- **Language manager**: give configurations friendly names, hide or delete the ones you don't use, open thcrap to add more.
+- **Updates in one click**: a notice appears when a new release is out, and TS Launcher replaces itself and restarts.
+- **Remembers its window** size, position and maximized state.
 - **Keyboard and Xbox controller navigation**, menu sounds, accent themes (including one that follows each game's colour).
 - **Built to be dependable**: crash reports instead of silent failures, safe mode if a start fails, settings and play-time files written atomically with daily backups and automatic recovery.
 
@@ -26,7 +29,7 @@ Coming from the old PowerShell "Touhou Launcher"? Put `TSLauncher.exe` where `To
 
 ## Your data
 
-Everything is stored next to `TSLauncher.exe`; nothing is sent anywhere except cover requests to SteamGridDB (with your own key).
+Everything is stored next to `TSLauncher.exe`; nothing is sent anywhere except cover requests to SteamGridDB (with your own key) and the update check against this repository's releases.
 
 | File / folder | What it holds |
 |---|---|
@@ -55,6 +58,7 @@ To release a new version, bump `AssemblyVersion` / `AssemblyFileVersion` (and `A
 | `Library.cs` | thcrap, games, languages and shortcuts |
 | `Tracking.cs`, `Native.cs` | Launching and timing games, process list, controller, `.lnk` files |
 | `Sgdb.cs`, `Extras.cs` | SteamGridDB covers, save backups, replays, sounds |
+| `Update.cs` | Update check and in-place update |
 | `Ui*.cs`, `Window.xaml` | The interface |
 
 ## Credits

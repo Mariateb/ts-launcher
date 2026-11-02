@@ -12,7 +12,8 @@ namespace TSLauncher
     public static class AppInfo
     {
         public const string Name = "TS Launcher";
-        public const string Version = "1.0";
+        /// <summary>From AssemblyVersion in Program.cs (the release workflow reads the same number).</summary>
+        public static readonly string Version = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version.ToString(3);
     }
 
     /// <summary>Everything lives next to the exe (portable). File names are kept from the old launcher.</summary>
@@ -387,7 +388,19 @@ namespace TSLauncher
             { "ar", "العربية" }, { "he", "עברית" }, { "el", "Ελληνικά" }, { "ro", "Română" },
         };
 
+        /// <summary>Names chosen in Settings > Languages (code -> display name).</summary>
+        public static Dictionary<string, string> Custom = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
         public static string Label(string code)
+        {
+            if (string.IsNullOrEmpty(code)) return code;
+            string n;
+            if (Custom.TryGetValue(code, out n) && !string.IsNullOrWhiteSpace(n)) return n;
+            return AutoLabel(code);
+        }
+
+        /// <summary>The automatic name, ignoring any custom one.</summary>
+        public static string AutoLabel(string code)
         {
             if (string.IsNullOrEmpty(code)) return code;
             string n;

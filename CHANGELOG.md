@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.1.0 — 2026-11-02
+
+- **Language manager** (Settings > Languages): rename how a language appears, hide the ones you don't use, delete a thcrap configuration (Recycle Bin), and open thcrap to add new ones; the library refreshes when you come back.
+- **Quick filters** next to the sort button: All, Played, Never played, Steam, Folder.
+- **Remembers the window**: size, position and maximized state, kept on a visible screen.
+- **Update notice**: checks GitHub at startup and installs a new version in one click (download, replace, restart). Can be turned off in Settings > About, with a "Check now" button.
+- Notices no longer replace each other: a second one waits until the first is closed.
+
 ## 1.0 — 2026-11-02
 
 First release of TS Launcher, a full rewrite of the PowerShell "Touhou Launcher" as a compiled C# / WPF application.

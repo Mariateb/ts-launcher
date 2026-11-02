@@ -32,8 +32,17 @@ namespace TSLauncher
         public string Root, Loader, ConfigDir;
     }
 
+    /// <summary>One language as listed in Settings > Languages.</summary>
+    public sealed class LangInfo
+    {
+        public string Code, Config;   // Config is null for shortcut-only languages
+        public int Games;
+        public bool Hidden;
+    }
+
     public sealed class LibraryResult
     {
+        public List<LangInfo> AllLangs = new List<LangInfo>();
         public ThcrapInfo Thcrap;
         public List<Game> Games = new List<Game>();
         public List<Game> Unowned = new List<Game>();
@@ -97,6 +106,14 @@ namespace TSLauncher
             return d;
         }
 
+        /// <summary>thcrap's own program (configurator), if present.</summary>
+        public static string ThcrapExe(ThcrapInfo thc)
+        {
+            if (thc == null) return null;
+            return new[] { Path.Combine(thc.Root, "thcrap.exe"), Path.Combine(thc.Root, "bin", "thcrap_configure_v3.exe"), Path.Combine(thc.Root, "bin", "thcrap_configure.exe") }
+                .FirstOrDefault(File.Exists);
+        }
+
         /// <summary>The saved folder first, then next to / above the launcher, then shortcuts and a shallow search.</summary>
         public static ThcrapInfo Find(string savedPath, string root)
         {
@@ -123,7 +140,7 @@ namespace TSLauncher
         }
 
         /// <summary>Scans everything (runs on a background thread).</summary>
-        public static LibraryResult Build(ThcrapInfo thc, string root)
+        public static LibraryResult Build(ThcrapInfo thc, string root, ICollection<string> hidden = null)
         {
             var r = new LibraryResult { Thcrap = thc };
             if (thc == null) return r;
@@ -179,6 +196,22 @@ namespace TSLauncher
                 }
                 if (s.Custom) l.CustomShortcut = s.Path; else l.Shortcut = s.Path;
             }
+
+            // Inventory of every language (for the language manager), then drop the hidden ones.
+            var inv = new Dictionary<string, LangInfo>(StringComparer.OrdinalIgnoreCase);
+            foreach (var c in configs) inv[c.Key] = new LangInfo { Code = c.Key, Config = c.Value };
+            foreach (var g in games.Values)
+                foreach (var l in g.Langs)
+                {
+                    LangInfo li;
+                    if (!inv.TryGetValue(l.Code, out li)) { li = new LangInfo { Code = l.Code, Config = l.Config }; inv[l.Code] = li; }
+                    li.Games++;
+                }
+            foreach (var li in inv.Values) li.Hidden = hidden != null && hidden.Contains(li.Code);
+            r.AllLangs = inv.Values.OrderBy(x => x.Code, StringComparer.OrdinalIgnoreCase).ToList();
+            r.ConfigCount = r.AllLangs.Count(x => !x.Hidden && x.Config != null);
+            if (hidden != null && hidden.Count > 0)
+                foreach (var g in games.Values) g.Langs.RemoveAll(l => hidden.Contains(l.Code));
 
             r.Games = games.Values.Where(g => g.Exe != null || g.Langs.Count > 0)
                 .OrderBy(g => Catalog.Number(g.Id)).ThenBy(g => g.Id, StringComparer.Ordinal).ToList();

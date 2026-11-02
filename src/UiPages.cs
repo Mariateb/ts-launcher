@@ -195,6 +195,8 @@ namespace TSLauncher
             SettingRow("Show games I don't own", "Adds the missing games as greyed-out cards that link to the Steam store.",
                 Switch(S.ShowUnowned, v => { S.ShowUnowned = v; S.Save(); RebuildCards(); if (v) StartCoverDownload(false, true); }));
 
+            BuildLanguageSection();
+
             Section("Playing");
             SettingRow("Close after launch", "Hide in the system tray while you play. Play time is still counted; click the tray icon to see it.",
                 Switch(S.CloseAfterLaunch, v => { S.CloseAfterLaunch = v; S.Save(); }));
@@ -261,7 +263,120 @@ namespace TSLauncher
             SettingRow("First-run setup", "Go through the welcome steps again (thcrap folder, covers, preferences).", setup);
 
             Section("About");
-            StatsPanel.Children.Add(TB(AppInfo.Name + " " + AppInfo.Version + "  ·  game and language picker for thcrap", 13, "#8E8CA6"));
+            var check = FlatBtn("Check now", () => CheckForUpdate(true)); check.IsEnabled = !SafeMode;
+            SettingRow("Updates", AppInfo.Name + " " + AppInfo.Version + ". Checks GitHub for a new version when it starts, and offers to install it for you.",
+                Switch(S.CheckUpdates, v => { S.CheckUpdates = v; S.Save(); }),
+                check,
+                FlatBtn("Release notes", () => { try { Process.Start(Updater.ReleasesPage); } catch { } }));
+            StatsPanel.Children.Add(TB(AppInfo.Name + " " + AppInfo.Version + "  ·  game and language picker for thcrap  ·  github.com/" + Updater.Repo, 13, "#8E8CA6"));
+        }
+
+        // ---------------------------------------------------------------- language manager
+        bool thcrapOpened;
+
+        void BuildLanguageSection()
+        {
+            Section("Languages");
+            var thcrapExe = Library.ThcrapExe(Lib.Thcrap);
+            var open = FlatBtn("Open thcrap", OpenThcrap);
+            open.IsEnabled = thcrapExe != null && !SafeMode;
+            SettingRow("Add a language", "Languages are thcrap configurations. Open thcrap, create a configuration with the patches you want, and TS Launcher picks it up when you come back.",
+                open, FlatBtn("Refresh", () => Reload(() => StatusText.Text += "  ·  refreshed")));
+
+            if (Lib.AllLangs.Count == 0)
+            {
+                Para(Lib.Thcrap == null ? "Set your thcrap folder above to see your languages." : "No configurations yet: create one in thcrap.");
+                return;
+            }
+            foreach (var li in Lib.AllLangs)
+            {
+                var info = li;
+                string custom;
+                bool renamed = S.LangNames.TryGetValue(info.Code, out custom) && !string.IsNullOrWhiteSpace(custom);
+                var desc = new List<string> { info.Code };
+                if (renamed) desc.Add("automatic name: " + Langs.AutoLabel(info.Code));
+                desc.Add(info.Hidden ? "hidden" : "in " + Fmt.Plural(info.Games, "game", "games"));
+                if (info.Config == null) desc.Add("from shortcuts only");
+
+                var rename = FlatBtn("Rename…", () => RenameLang(info.Code));
+                var hide = FlatBtn(info.Hidden ? "Show" : "Hide", () => ToggleLangHidden(info.Code));
+                var del = FlatBtn("Delete…", () => DeleteLang(info));
+                rename.IsEnabled = hide.IsEnabled = !SafeMode;
+                del.IsEnabled = !SafeMode && info.Config != null && File.Exists(info.Config);
+                if (info.Config == null) del.ToolTip = "This language comes from shortcuts, not from a thcrap configuration.";
+
+                var title = Langs.Label(info.Code) + (info.Hidden ? "   (hidden)" : "");
+                SettingRow(title, string.Join("   ·   ", desc), rename, hide, del);
+                if (info.Hidden)
+                {
+                    var row = (Border)StatsPanel.Children[StatsPanel.Children.Count - 1];
+                    row.Opacity = 0.6;
+                }
+            }
+        }
+
+        void OpenThcrap()
+        {
+            var exe = Library.ThcrapExe(Lib.Thcrap);
+            if (exe == null) { ShowError("Couldn't find thcrap.exe in your thcrap folder."); return; }
+            var p = Process.Start(new ProcessStartInfo(exe) { WorkingDirectory = Lib.Thcrap.Root, UseShellExecute = true });
+            thcrapOpened = true;   // refreshed when you come back to TS Launcher
+            StatusText.Text = "thcrap is open: your library refreshes when you come back here.";
+            if (p != null)
+            {
+                try
+                {
+                    p.EnableRaisingEvents = true;
+                    p.Exited += (s, e) => W.Dispatcher.BeginInvoke(new Action(() =>
+                    {
+                        if (!thcrapOpened) return;
+                        thcrapOpened = false;
+                        Reload(() => StatusText.Text += "  ·  refreshed after thcrap");
+                    }));
+                }
+                catch { }
+            }
+        }
+
+        void ApplyLangNames()
+        {
+            Langs.Custom = new Dictionary<string, string>(S.LangNames, StringComparer.OrdinalIgnoreCase);
+            S.Save();
+            RebuildCards();
+            if (View == "settings") BuildSettingsPage();
+        }
+
+        void RenameLang(string code)
+        {
+            var v = Ask("Name to show for \"" + code + "\" (only in TS Launcher; thcrap keeps its own name).\n\nLeave empty to go back to the automatic name: " + Langs.AutoLabel(code),
+                "Rename language", Langs.Label(code));
+            if (v == null) return;
+            v = v.Trim();
+            if (v.Length == 0 || v == Langs.AutoLabel(code)) S.LangNames.Remove(code); else S.LangNames[code] = v;
+            ApplyLangNames();
+        }
+
+        void ToggleLangHidden(string code)
+        {
+            if (!S.HiddenLangs.Remove(code)) S.HiddenLangs.Add(code);
+            S.Save();
+            Sounds.Play("toggle");
+            Reload();
+        }
+
+        void DeleteLang(LangInfo info)
+        {
+            if (info.Config == null || !File.Exists(info.Config)) return;
+            if (!Confirm("Delete the thcrap configuration \"" + info.Code + "\" (" + Langs.Label(info.Code) + ")?\n\n" +
+                         "Its file (" + Path.GetFileName(info.Config) + ") goes to the Recycle Bin, so it disappears from thcrap too but can be recovered. " +
+                         "If you only want it out of TS Launcher, use Hide instead.", "Delete language")) return;
+            Microsoft.VisualBasic.FileIO.FileSystem.DeleteFile(info.Config, Microsoft.VisualBasic.FileIO.UIOption.OnlyErrorDialogs, Microsoft.VisualBasic.FileIO.RecycleOption.SendToRecycleBin);
+            Log.App("Deleted thcrap configuration " + info.Config);
+            S.LangNames.Remove(info.Code); S.HiddenLangs.Remove(info.Code);
+            foreach (var k in S.LastLang.Where(kv => string.Equals(kv.Value, info.Code, StringComparison.OrdinalIgnoreCase)).Select(kv => kv.Key).ToList()) S.LastLang.Remove(k);
+            Langs.Custom.Remove(info.Code);
+            S.Save();
+            Reload();
         }
 
         bool PickThcrap()
@@ -298,7 +413,9 @@ namespace TSLauncher
             PageHeader("Help", "Esc or the library button below to go back");
             Section("The basics");
             Para("TS Launcher reads your thcrap setup. Every game thcrap knows about shows up here, and every configuration you made in thcrap (en, fr, en-lol...) becomes a language you can pick. Games found through Steam are labelled \"Steam\", the others \"Folder\".");
-            Para("A game is missing? Open thcrap, let it search for games (or point it to the game's folder), then use Refresh in Settings. A language is missing? Create a new configuration in thcrap with the patches you want: it appears in every game automatically.");
+            Para("A game is missing? Open thcrap, let it search for games (or point it to the game's folder), then use Refresh in Settings. A language is missing? Settings > Languages > Open thcrap: create a configuration with the patches you want, and it appears in every game when you come back.");
+            Para("Settings > Languages also lets you give a language a friendlier name (for example \"French (TSA)\" instead of base_tsa-MoFrance), hide the ones you don't use, or delete a configuration (it goes to the Recycle Bin).");
+            Para("The filters above your games (Played, Never played, Steam, Folder) narrow the library down; All shows everything again.");
 
             Section("Playing");
             Para("Click a game to choose its language. Right-click a game to start it straight away in the language you used last time. The big banner at the top always shows your last game with a Play button.");
@@ -340,8 +457,11 @@ namespace TSLauncher
             Section("If something goes wrong");
             Para("If TS Launcher hits an error it shows what happened and writes a report in the logs folder. If it fails while starting, the next start offers safe mode: your settings stay untouched and covers, sounds and the controller are off, so you can still play. Your settings and play-time files are written safely (never half-written) and backed up every day; if one gets damaged it is restored from a backup automatically.");
 
+            Section("Updates");
+            Para("When it starts, TS Launcher checks GitHub for a new version. If there is one, a bar at the top offers to install it: it downloads the new TSLauncher.exe, replaces the old one and restarts, keeping all your settings and play time. You can turn the check off or check by hand in Settings > About.");
+
             Section("Privacy");
-            Para("Everything stays on your computer, in TS Launcher's folder. The only things that go online are cover downloads from SteamGridDB (using your key) and Steam store pages you choose to open.");
+            Para("Everything stays on your computer, in TS Launcher's folder. The only things that go online are cover downloads from SteamGridDB (using your key), the update check on GitHub (which sends nothing about you), and Steam store pages you choose to open.");
         }
 
         // ---------------------------------------------------------------- first-run setup

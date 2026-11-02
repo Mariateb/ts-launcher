@@ -28,6 +28,12 @@ namespace TSLauncher
         public bool SoundsOn = true;
         public int SoundVolume = 35;
         public bool SetupDone;
+        public Dictionary<string, string> LangNames = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        public HashSet<string> HiddenLangs = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        public string Filter = "all";
+        public double? WinLeft, WinTop, WinWidth, WinHeight;
+        public bool WinMaximized;
+        public bool CheckUpdates = true;
 
         /// <summary>When true (safe mode) nothing is ever written back to disk.</summary>
         public bool ReadOnly;
@@ -70,6 +76,18 @@ namespace TSLauncher
             s.SoundsOn = Json.Bool(j, "SoundsOn") ?? true;
             s.SoundVolume = (int)Math.Max(0, Math.Min(100, Json.Num(j, "SoundVolume") ?? 35));
             s.SetupDone = Json.Bool(j, "SetupDone") ?? true;
+            foreach (var kv in Dict(j, "LangNames")) if (kv.Value != null) s.LangNames[kv.Key] = Convert.ToString(kv.Value, CultureInfo.InvariantCulture);
+            foreach (var kv in Dict(j, "HiddenLangs")) if (kv.Value is bool && (bool)kv.Value) s.HiddenLangs.Add(kv.Key);
+            var filter = Json.Str(j, "Filter");
+            if (filter == "all" || filter == "played" || filter == "never" || filter == "steam" || filter == "folder") s.Filter = filter;
+            var win = Json.Obj(Json.Get(j, "Window"));
+            if (win != null)
+            {
+                s.WinLeft = Json.Num(win, "Left"); s.WinTop = Json.Num(win, "Top");
+                s.WinWidth = Json.Num(win, "Width"); s.WinHeight = Json.Num(win, "Height");
+                s.WinMaximized = Json.Bool(win, "Maximized") ?? false;
+            }
+            s.CheckUpdates = Json.Bool(j, "CheckUpdates") ?? true;
             return s;
         }
 
@@ -102,7 +120,17 @@ namespace TSLauncher
                     { "SoundsOn", SoundsOn },
                     { "SoundVolume", SoundVolume },
                     { "SetupDone", SetupDone },
+                    { "LangNames", new SortedDictionary<string, string>(LangNames, StringComparer.OrdinalIgnoreCase) },
+                    { "HiddenLangs", HiddenLangs.OrderBy(x => x).ToDictionary(x => x, x => true) },
+                    { "Filter", Filter },
+                    { "CheckUpdates", CheckUpdates },
                 };
+                if (WinWidth != null && WinHeight != null)
+                    o["Window"] = new SortedDictionary<string, object>
+                    {
+                        { "Left", Math.Round(WinLeft ?? 0) }, { "Top", Math.Round(WinTop ?? 0) },
+                        { "Width", Math.Round(WinWidth.Value) }, { "Height", Math.Round(WinHeight.Value) }, { "Maximized", WinMaximized },
+                    };
                 SafeFile.WriteAllText(Paths.Settings, Json.Serialize(o));
             }
             catch (Exception ex) { Log.Error("Settings.Save", ex); }
