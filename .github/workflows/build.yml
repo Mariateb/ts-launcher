@@ -50,6 +50,29 @@ jobs:
           Copy-Item README.md, LICENSE, CHANGELOG.md dist/TSLauncher/
           Compress-Archive -Path dist/TSLauncher -DestinationPath dist/TSLauncher.zip -Force
 
+      - name: Release notes from CHANGELOG.md
+        shell: pwsh
+        run: |
+          # The section of CHANGELOG.md for this version: from its "## x.y.z" heading to the next "## " heading.
+          $v = "${{ steps.ver.outputs.version }}"
+          $short = $v -replace '\.0$', ''          # "1.0.0" is written "1.0" in the changelog
+          $lines = Get-Content CHANGELOG.md -Encoding UTF8
+          $out = New-Object System.Collections.Generic.List[string]
+          $in = $false
+          foreach ($l in $lines) {
+            if ($l -match '^## +(\S+)') {
+              if ($in) { break }
+              $in = ($Matches[1] -eq $v -or $Matches[1] -eq $short)
+              continue
+            }
+            if ($in) { $out.Add($l) }
+          }
+          $body = ($out -join "`n").Trim()
+          if (-not $body) { $body = "See [CHANGELOG.md](CHANGELOG.md)." ; Write-Host "::warning::No CHANGELOG.md section for $v" }
+          $body += "`n`n**Install:** download TSLauncher.zip below and put TSLauncher.exe where the old one was. If you already have TS Launcher 1.1.0 or newer, it offers this update by itself."
+          Set-Content -Path release-notes.md -Value $body -Encoding UTF8
+          Write-Host "---- release notes ----"; Write-Host $body
+
       - uses: actions/upload-artifact@v4
         with:
           name: TSLauncher
@@ -63,11 +86,11 @@ jobs:
           target_commitish: ${{ github.sha }}
           name: TS Launcher ${{ steps.ver.outputs.version }}
           files: dist/TSLauncher.zip
-          generate_release_notes: true
+          body_path: release-notes.md
 
       - name: Publish release (pushed tag)
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
           files: dist/TSLauncher.zip
-          generate_release_notes: true
+          body_path: release-notes.md

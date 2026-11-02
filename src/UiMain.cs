@@ -197,7 +197,7 @@ namespace TSLauncher
         void InstallUpdate(UpdateInfo info)
         {
             if (Track.Sessions.Count > 0) { ShowError("Close your game first: updating restarts TS Launcher, which would stop the play-time count."); return; }
-            var notes = (info.Notes ?? "").Trim();
+            var notes = Updater.PlainNotes(info.Notes);
             if (notes.Length > 900) notes = notes.Substring(0, 900).TrimEnd() + "…";
             var msg = "Update TS Launcher to " + info.VersionText + "?\n\n" + (notes.Length > 0 ? "What's new:\n" + notes + "\n\n" : "") +
                       "It downloads from GitHub, replaces TSLauncher.exe and restarts. Your settings and play time are kept.";

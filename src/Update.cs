@@ -7,6 +7,8 @@ using System.Linq;
 using System.Net;
 using System.Reflection;
 using System.Text;
+using System.Text.RegularExpressions;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 
 namespace TSLauncher
@@ -67,6 +69,25 @@ namespace TSLauncher
                 return info != null && IsNewer(info.Version, Current) && info.ZipUrl != null ? info : null;
             }
             catch (Exception ex) { Log.App("Update check failed: " + ex.Message); return null; }
+        }
+
+        /// <summary>Release notes (Markdown) as plain text for a message box: no **, `, links; bullets as •.</summary>
+        public static string PlainNotes(string md)
+        {
+            if (string.IsNullOrWhiteSpace(md)) return "";
+            var lines = new List<string>();
+            foreach (var raw in md.Replace("\r", "").Split('\n'))
+            {
+                var l = raw;
+                if (l.TrimStart().StartsWith("**Install:**")) break;                      // the install hint is for the web page
+                l = Regex.Replace(l, @"\[([^\]]+)\]\([^)]+\)", "$1");                     // [text](url) -> text
+                l = l.Replace("**", "").Replace("__", "").Replace("`", "");
+                l = Regex.Replace(l, @"(?<![\w*])\*([^*\n]+)\*(?![\w*])", "$1");          // *italic* -> italic
+                var m = Regex.Match(l, @"^(\s*)[-*] (.*)$");
+                if (m.Success) l = (m.Groups[1].Value.Length >= 2 ? "      ◦ " : "• ") + m.Groups[2].Value;
+                lines.Add(l.TrimEnd());
+            }
+            return string.Join("\n", lines).Trim();
         }
 
         /// <summary>Reads GitHub's "latest release" JSON (null for drafts and pre-releases).</summary>
