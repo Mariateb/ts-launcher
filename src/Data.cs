@@ -86,7 +86,8 @@ namespace TSLauncher
                 if (ids.Count > 0) s.LangGames[kv.Key] = ids;
             }
             var filter = Json.Str(j, "Filter");
-            if (filter == "all" || filter == "played" || filter == "never" || filter == "steam" || filter == "folder") s.Filter = filter;
+            if (filter == "folder") filter = "local";   // renamed in 1.2.1
+            if (filter == "all" || filter == "played" || filter == "never" || filter == "steam" || filter == "local") s.Filter = filter;
             var win = Json.Obj(Json.Get(j, "Window"));
             if (win != null)
             {

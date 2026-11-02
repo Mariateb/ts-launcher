@@ -14,8 +14,8 @@ using WinForms = System.Windows.Forms;
 [assembly: AssemblyTitle("TS Launcher")]
 [assembly: AssemblyProduct("TS Launcher")]
 [assembly: AssemblyDescription("Game and language picker for thcrap")]
-[assembly: AssemblyVersion("1.2.0.0")]
-[assembly: AssemblyFileVersion("1.2.0.0")]
+[assembly: AssemblyVersion("1.2.1.0")]
+[assembly: AssemblyFileVersion("1.2.1.0")]
 
 namespace TSLauncher
 {
@@ -33,6 +33,8 @@ namespace TSLauncher
             safeMode = args.Any(a => a.Equals("--safe", StringComparison.OrdinalIgnoreCase));
             string exe = Assembly.GetExecutingAssembly().Location;
             Paths.Init(Path.GetDirectoryName(Path.GetFullPath(exe)));
+            // Multicore JIT: records which code runs at startup and pre-compiles it on spare cores next time.
+            try { System.Runtime.ProfileOptimization.SetProfileRoot(Paths.Logs); System.Runtime.ProfileOptimization.StartProfile("startup.jitprofile"); } catch { }
 
             AppDomain.CurrentDomain.UnhandledException += (s, e) => CrashReporter.Report(e.ExceptionObject as Exception, true, safeMode);
             TaskScheduler.UnobservedTaskException += (s, e) => { Log.Error("background task", e.Exception); e.SetObserved(); };

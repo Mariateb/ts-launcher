@@ -2,6 +2,7 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
+using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text;
 
@@ -61,10 +62,15 @@ namespace TSLauncher
         [DllImport("kernel32.dll")] static extern bool GetProcessTimes(IntPtr h, out long creation, out long exit, out long kernel, out long user);
         [DllImport("kernel32.dll")] static extern bool GetExitCodeProcess(IntPtr h, out uint code);
 
+        // pid -> (exe name, creation time) of processes already looked at. Lets each poll open only the
+        // processes that are new, instead of every process on the PC once a second.
+        static readonly Dictionary<int, KeyValuePair<string, DateTime?>> Seen = new Dictionary<int, KeyValuePair<string, DateTime?>>();
+
         /// <summary>All processes created after 'since' (with parent ids, paths and creation times).</summary>
         public static List<ProcInfo> CreatedSince(DateTime since)
         {
             var list = new List<ProcInfo>();
+            var alive = new HashSet<int>();
             IntPtr snap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
             if (snap == IntPtr.Zero || snap == new IntPtr(-1)) return list;
             try
@@ -75,7 +81,11 @@ namespace TSLauncher
                 {
                     int pid = (int)e.th32ProcessID;
                     if (pid <= 4) continue;
+                    alive.Add(pid);
+                    KeyValuePair<string, DateTime?> known;
+                    if (Seen.TryGetValue(pid, out known) && known.Key == e.szExeFile && (known.Value == null || known.Value.Value < since)) continue;
                     var info = Describe(pid);
+                    Seen[pid] = new KeyValuePair<string, DateTime?>(e.szExeFile, info == null ? null : info.Created);
                     if (info == null || info.Created == null || info.Created.Value < since) continue;
                     info.ParentPid = (int)e.th32ParentProcessID;
                     info.Name = e.szExeFile;
@@ -83,6 +93,7 @@ namespace TSLauncher
                 } while (Process32NextW(snap, ref e));
             }
             finally { CloseHandle(snap); }
+            foreach (var gone in Seen.Keys.Where(p => !alive.Contains(p)).ToList()) Seen.Remove(gone);   // pids get reused
             return list;
         }
 
@@ -122,16 +133,22 @@ namespace TSLauncher
 
     public static class ShellLinks
     {
+        [ThreadStatic] static object shell;
+        [ThreadStatic] static Type shellType;
+
         /// <summary>Reads a .lnk through the WScript.Shell COM object (late bound, no interop assembly needed).</summary>
         public static LinkInfo Resolve(string lnk)
         {
-            object shell = null, sc = null;
+            object sc = null;
             try
             {
-                var t = Type.GetTypeFromProgID("WScript.Shell");
-                if (t == null) return null;
-                shell = Activator.CreateInstance(t);
-                sc = t.InvokeMember("CreateShortcut", System.Reflection.BindingFlags.InvokeMethod, null, shell, new object[] { lnk });
+                if (shell == null)
+                {
+                    shellType = Type.GetTypeFromProgID("WScript.Shell");
+                    if (shellType == null) return null;
+                    shell = Activator.CreateInstance(shellType);
+                }
+                sc = shellType.InvokeMember("CreateShortcut", System.Reflection.BindingFlags.InvokeMethod, null, shell, new object[] { lnk });
                 var st = sc.GetType();
                 Func<string, string> get = n => Convert.ToString(st.InvokeMember(n, System.Reflection.BindingFlags.GetProperty, null, sc, null));
                 return new LinkInfo { Target = get("TargetPath"), Arguments = get("Arguments"), WorkingDirectory = get("WorkingDirectory") };
@@ -140,7 +157,6 @@ namespace TSLauncher
             finally
             {
                 if (sc != null && Marshal.IsComObject(sc)) Marshal.ReleaseComObject(sc);
-                if (shell != null && Marshal.IsComObject(shell)) Marshal.ReleaseComObject(shell);
             }
         }
     }

@@ -24,7 +24,7 @@ namespace TSLauncher
         public LangEntry Lang(string code) { return code == null ? null : Langs.FirstOrDefault(l => string.Equals(l.Code, code, StringComparison.OrdinalIgnoreCase)); }
         public bool ExeExists { get { return !string.IsNullOrEmpty(Exe) && File.Exists(Exe); } }
         public bool HasCustom { get { return !string.IsNullOrEmpty(CustomExe) || Langs.Any(l => l.CustomShortcut != null); } }
-        public string Source { get { return Exe != null && Exe.IndexOf("\\steamapps\\", StringComparison.OrdinalIgnoreCase) >= 0 ? "Steam" : "Folder"; } }
+        public string Source { get { return Exe != null && Exe.IndexOf("\\steamapps\\", StringComparison.OrdinalIgnoreCase) >= 0 ? "Steam" : "Local"; } }
     }
 
     public sealed class ThcrapInfo
@@ -56,6 +56,15 @@ namespace TSLauncher
 
         sealed class Shortcut { public string Path, Id, Lang, Target; public bool Custom; }
 
+        /// <summary>TS Launcher's own folders: thousands of backup files, never any game shortcut.</summary>
+        static bool IsOwnDataFolder(string dir)
+        {
+            if (Paths.Root == null) return false;
+            foreach (var own in new[] { Paths.Covers, Paths.Backups, Paths.Logs })
+                if (string.Equals(dir.TrimEnd('\\', '/'), own, StringComparison.OrdinalIgnoreCase)) return true;
+            return false;
+        }
+
         static IEnumerable<string> FilesUpTo(string dir, int depth)
         {
             var result = new List<string>();
@@ -66,6 +75,7 @@ namespace TSLauncher
                 try { subs = Directory.GetDirectories(dir); } catch { }
                 foreach (var s in subs)
                 {
+                    if (IsOwnDataFolder(s)) continue;
                     try { if ((new DirectoryInfo(s).Attributes & FileAttributes.ReparsePoint) != 0) continue; } catch { continue; }
                     result.AddRange(FilesUpTo(s, depth - 1));
                 }

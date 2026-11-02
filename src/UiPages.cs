@@ -493,11 +493,11 @@ namespace TSLauncher
         {
             PageHeader("Help", "Esc or the library button below to go back");
             Section("The basics");
-            Para("TS Launcher reads your thcrap setup. Every game thcrap knows about shows up here, and every configuration you made in thcrap (en, fr, en-lol...) becomes a language you can pick. Games found through Steam are labelled \"Steam\", the others \"Folder\".");
+            Para("TS Launcher reads your thcrap setup. Every game thcrap knows about shows up here, and every configuration you made in thcrap (en, fr, en-lol...) becomes a language you can pick. Games found through Steam are labelled \"Steam\", the others \"Local\".");
             Para("A game is missing? Open thcrap, let it search for games (or point it to the game's folder), then use Refresh in Settings. A language is missing? Settings > Languages > Open thcrap: create a configuration with the patches you want, and it appears in every game when you come back.");
             Para("Settings > Languages also lets you give a language a friendlier name (for example \"French (TSA)\" instead of base_tsa-MoFrance), choose which games offer it (Games…, handy for a patch made for one game only), hide the ones you don't use, or delete a configuration (it goes to the Recycle Bin).");
             Para("Quicker: right-click a language in a game's window and choose \"Only show in this game\" or \"Don't show in this game\".");
-            Para("The filters above your games (Played, Never played, Steam, Folder) narrow the library down; All shows everything again.");
+            Para("The filters above your games (Played, Never played, Steam, Local) narrow the library down; All shows everything again.");
 
             Section("Playing");
             Para("Click a game to choose its language. Right-click a game to start it straight away in the language you used last time. The big banner at the top always shows your last game with a Play button.");

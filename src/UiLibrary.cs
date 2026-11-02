@@ -142,6 +142,9 @@ namespace TSLauncher
             return (st == null || !st.Played ? "Never played" : Fmt.Duration(st.Seconds)) + "  ·  " + g.Source;
         }
 
+        /// <summary>Frozen brushes are shared read-only and skip WPF's change tracking.</summary>
+        static T Frozen<T>(T b) where T : Freezable { b.Freeze(); return b; }
+
         // ---------------------------------------------------------------- cards
         Border NewCard(Game g)
         {
@@ -157,8 +160,7 @@ namespace TSLauncher
                 Width = 200, Height = 300, CornerRadius = new CornerRadius(3), Margin = Th(4, 0, 4, 0),
                 Cursor = Cursors.Hand, BorderThickness = Th(2, 2, 2, 2), Tag = g, ClipToBounds = false,
                 RenderTransform = new ScaleTransform(1, 1), RenderTransformOrigin = new Point(0.5, 0.5),
-                Effect = new DropShadowEffect { BlurRadius = 18, ShadowDepth = 4, Opacity = 0.55 },
-                Background = new LinearGradientBrush(color, Mix(color, Colors.Black, 0.78), 65),
+                Background = Frozen(new LinearGradientBrush(color, Mix(color, Colors.Black, 0.78), 65)),
                 ToolTip = unowned ? "Touhou " + g.NumText + " - " + g.Title + "\nNot in your library - click to look it up on Steam"
                                   : "Touhou " + g.NumText + " - " + g.Title + "\nClick: choose language  ·  Right-click: replay last language  ·  F: favorite",
             };
@@ -212,7 +214,7 @@ namespace TSLauncher
             var sb = new LinearGradientBrush { StartPoint = new Point(0, 0), EndPoint = new Point(0, 1) };
             sb.GradientStops.Add(new GradientStop(Color.FromArgb(0, 0, 0, 0), 0));
             sb.GradientStops.Add(new GradientStop(Color.FromArgb(235, 12, 11, 22), 0.45));
-            strip.Background = sb;
+            strip.Background = Frozen(sb);
             var sp = new StackPanel();
             if (hasCover)
             {
@@ -274,7 +276,7 @@ namespace TSLauncher
             }
             else
             {
-                card.Effect = new DropShadowEffect { BlurRadius = 18, ShadowDepth = 4, Opacity = 0.55 };
+                card.Effect = null;   // a blurred shadow on every card is costly to redraw; only the focused one glows
                 card.BorderBrush = Br(card.Uid);
                 card.BorderThickness = Th(2, 2, 2, 2);
                 Scale(card, 1.0);
@@ -382,10 +384,10 @@ namespace TSLauncher
         }
 
         // ---------------------------------------------------------------- quick filters
-        static readonly string[] FilterKeys = { "all", "played", "never", "steam", "folder" };
+        static readonly string[] FilterKeys = { "all", "played", "never", "steam", "local" };
         static readonly Dictionary<string, string> FilterNames = new Dictionary<string, string>
         {
-            { "all", "All" }, { "played", "Played" }, { "never", "Never played" }, { "steam", "Steam" }, { "folder", "Folder" },
+            { "all", "All" }, { "played", "Played" }, { "never", "Never played" }, { "steam", "Steam" }, { "local", "Local" },
         };
         readonly Dictionary<string, Button> filterChips = new Dictionary<string, Button>();
 
@@ -425,7 +427,7 @@ namespace TSLauncher
                 case "played": { var st = Stats.Get(g.Id); return !g.Unowned && st != null && st.Played; }
                 case "never": { var st = Stats.Get(g.Id); return !g.Unowned && (st == null || !st.Played); }
                 case "steam": return !g.Unowned && g.Source == "Steam";
-                case "folder": return !g.Unowned && g.Source == "Folder";
+                case "local": return !g.Unowned && g.Source == "Local";
                 default: return true;
             }
         }

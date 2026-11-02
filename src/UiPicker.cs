@@ -400,11 +400,10 @@ namespace TSLauncher
             lock (run.Ids) foreach (var kv in run.Ids) S.SgdbIds[kv.Key] = kv.Value;
             foreach (var j in run.Jobs) S.CoverMisses[j.Id] = Covers.Find(j.Id) == null || Covers.Find(j.Id + "_hero") == null;
             S.Save();
-            Reload(() =>
-            {
-                if (run.Error != null) ShowError(run.Error + "\nChange the key in Settings > Covers.");
-                else if (run.Got > 0) StatusText.Text += "  ·  " + run.Got + " new covers";
-            });
+            RebuildCards();
+            StatusText.Text = Fmt.Plural(Lib.Games.Count, "game", "games") + "  ·  " + Fmt.Plural(Lib.ConfigCount, "language", "languages");
+            if (run.Error != null) ShowError(run.Error + "\nChange the key in Settings > Covers.");
+            else if (run.Got > 0) StatusText.Text += "  ·  " + run.Got + " new covers";
         }
 
         // ---------------------------------------------------------------- cover gallery

@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.2.1 — 2026-11-02
+
+- Games that aren't from Steam are now labelled **Local** instead of "Folder" (cards, game window, filters).
+- Faster:
+  - No blurred shadow on every card any more, only on the focused one, so scrolling and hovering redraw much less.
+  - While a game is starting, the launcher only looks at new processes instead of opening every process on the PC once a second.
+  - The library scan skips TS Launcher's own covers, backups and logs folders (about 14× faster with a few months of backups).
+  - A finished cover download redraws the cards instead of rescanning thcrap.
+  - Shortcuts are read with one shared helper instead of one per file.
+  - Startup code is pre-compiled in the background from the second launch on.
+
 ## 1.2.0 — 2026-11-02
 
 - **Languages per game**: choose which games offer each language, for patches made for one game only (like a Mountain of Faith–only translation).
