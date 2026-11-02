@@ -39,24 +39,16 @@ namespace TSLauncher
             return Cache.TryGetValue(Key(path, width, gray), out b) ? b : null;
         }
 
-        public static BitmapSource Decode(string path, int width, bool gray)
+        public static BitmapSource Decode(string path, int width, bool gray, bool diskThumb = true)
         {
             var key = Key(path, width, gray);
             BitmapSource cached;
             if (Cache.TryGetValue(key, out cached)) return cached;
-            var bytes = File.ReadAllBytes(path);
-            var bi = new BitmapImage();
-            bi.BeginInit();
-            bi.CacheOption = BitmapCacheOption.OnLoad;
-            bi.StreamSource = new MemoryStream(bytes);
-            bi.DecodePixelWidth = width;
-            bi.EndInit();
-            bi.Freeze();
-            BitmapSource result = bi;
+            BitmapSource result = diskThumb ? LoadThumb(path, width) : DecodeBytes(File.ReadAllBytes(path), width);
             if (gray)
             {
                 var f = new FormatConvertedBitmap();
-                f.BeginInit(); f.Source = bi; f.DestinationFormat = PixelFormats.Gray8; f.EndInit();
+                f.BeginInit(); f.Source = result; f.DestinationFormat = PixelFormats.Gray8; f.EndInit();
                 f.Freeze();
                 result = f;
             }
@@ -64,15 +56,60 @@ namespace TSLauncher
             return result;
         }
 
+        public static BitmapImage DecodeBytes(byte[] bytes, int width)
+        {
+            var bi = new BitmapImage();
+            bi.BeginInit();
+            bi.CacheOption = BitmapCacheOption.OnLoad;
+            bi.StreamSource = new MemoryStream(bytes);
+            if (width > 0) bi.DecodePixelWidth = width;
+            bi.EndInit();
+            bi.Freeze();
+            return bi;
+        }
+
+        /// <summary>
+        /// Full-size covers (often 1-2 MB PNGs) are decoded once, then a copy at the displayed size is kept in
+        /// covers\.thumbs, so later starts only decode a small file. The copy is tied to the source's date.
+        /// </summary>
+        static BitmapSource LoadThumb(string path, int width)
+        {
+            long ticks = 0;
+            try { ticks = File.GetLastWriteTimeUtc(path).Ticks; } catch { }
+            var baseName = System.IO.Path.GetFileNameWithoutExtension(path) + "_" + width + "_";
+            var thumb = System.IO.Path.Combine(Paths.Thumbs, baseName + ticks.ToString("x") + ".png");
+            try { if (File.Exists(thumb)) return DecodeBytes(File.ReadAllBytes(thumb), 0); }
+            catch { try { File.Delete(thumb); } catch { } }
+
+            var bi = DecodeBytes(File.ReadAllBytes(path), width);
+            if (bi.PixelWidth < width * 0.9 || new FileInfo(path).Length < 150 * 1024) return bi;   // small already: no copy needed
+            try
+            {
+                Directory.CreateDirectory(Paths.Thumbs);
+                var tmp = thumb + ".tmp";
+                BitmapEncoder enc = new PngBitmapEncoder();
+                if (!bi.Format.ToString().Contains("a") && !bi.Format.ToString().Contains("A")) enc = new JpegBitmapEncoder { QualityLevel = 92 };
+                enc.Frames.Add(BitmapFrame.Create(bi));
+                using (var fs = File.Create(tmp)) enc.Save(fs);
+                if (File.Exists(thumb)) File.Delete(thumb);
+                File.Move(tmp, thumb);
+                foreach (var old in Directory.GetFiles(Paths.Thumbs, baseName + "*.png"))
+                    if (!string.Equals(old, thumb, StringComparison.OrdinalIgnoreCase)) try { File.Delete(old); } catch { }
+            }
+            catch (Exception ex) { Log.App("Could not save thumbnail for " + path + ": " + ex.Message); }
+            return bi;
+        }
+
         /// <summary>Calls back on the UI thread once decoded (immediately if already in memory).</summary>
-        public static void Load(Dispatcher ui, string path, int width, bool gray, Action<BitmapSource> done)
+        /// <param name="diskThumb">false for one-off pictures (screenshots): don't keep a small copy on disk.</param>
+        public static void Load(Dispatcher ui, string path, int width, bool gray, Action<BitmapSource> done, bool diskThumb = true)
         {
             if (path == null) return;
             var hit = TryGet(path, width, gray);
             if (hit != null) { done(hit); return; }
             Task.Run(() =>
             {
-                try { var b = Decode(path, width, gray); ui.BeginInvoke(new Action(() => done(b))); }
+                try { var b = Decode(path, width, gray, diskThumb); ui.BeginInvoke(new Action(() => done(b))); }
                 catch (Exception ex) { Log.App("Could not load picture " + path + ": " + ex.Message); }
             });
         }
@@ -131,7 +168,7 @@ namespace TSLauncher
         string BadgeText(Game g)
         {
             var last = LastLang(g);
-            if (last != null) return "▶  " + Langs.Label(last);
+            if (last != null) return "▶  " + Langs.Label(last) + (UsesThprac(g) ? "  ·  thprac" : "");
             int n = g.Langs.Count;
             return n == 0 ? "No language config" : n == 1 ? "1 language" : n + " languages";
         }
@@ -140,6 +177,28 @@ namespace TSLauncher
         {
             var st = Stats.Get(g.Id);
             return (st == null || !st.Played ? "Never played" : Fmt.Duration(st.Seconds)) + "  ·  " + g.Source;
+        }
+
+        // ---------------------------------------------------------------- picture sizes
+        double DpiScale()
+        {
+            try { var src = PresentationSource.FromVisual(W); if (src != null && src.CompositionTarget != null) return src.CompositionTarget.TransformToDevice.M11; }
+            catch { }
+            return 1.0;
+        }
+
+        /// <summary>Pixels a cover needs at the current card size and screen DPI (+ the hover zoom), in steps of 80.</summary>
+        int CoverWidth()
+        {
+            double px = 200 * Math.Max(1.0, S.CardScale) * 1.06 * DpiScale();
+            return (int)Math.Max(240, Math.Min(960, Math.Ceiling(px / 80) * 80));
+        }
+
+        /// <summary>One size for every banner (Continue banner and game window), from the screen width.</summary>
+        int HeroWidth()
+        {
+            double px = Math.Max(1200, SystemParameters.PrimaryScreenWidth) * DpiScale();
+            return (int)Math.Max(1200, Math.Min(2560, Math.Ceiling(px / 320) * 320));
         }
 
         /// <summary>Frozen brushes are shared read-only and skip WPF's change tracking.</summary>
@@ -174,7 +233,7 @@ namespace TSLauncher
             var artClip = new Border { CornerRadius = new CornerRadius(2), ClipToBounds = true, Child = art };
             grid.Children.Add(artClip);
             if (hasCover)
-                ImageCache.Load(W.Dispatcher, coverPath, 440, unowned, bmp =>
+                ImageCache.Load(W.Dispatcher, coverPath, CoverWidth(), unowned, bmp =>
                 {
                     art.Source = bmp;
                     art.BeginAnimation(UIElement.OpacityProperty, new DoubleAnimation(1, new Duration(TimeSpan.FromMilliseconds(220))));
@@ -264,7 +323,7 @@ namespace TSLauncher
             cardTitles.TryGetValue(g.Id, out title);
             if (on)
             {
-                FollowGameTheme(g);
+                FollowGameTheme(g, false);
                 Sounds.Play("move");
                 card.Effect = new DropShadowEffect { Color = accentLight, BlurRadius = 26, ShadowDepth = 0, Opacity = 0.9 };
                 var pulse = new SolidColorBrush(Colors.White);
@@ -351,8 +410,23 @@ namespace TSLauncher
             }
         }
 
+        int builtCoverWidth;
+        DispatcherTimer sharpenDelay;
+
+        /// <summary>After the card size changes, rebuild once (debounced) if covers need more pixels.</summary>
+        void SharpenCoversLater()
+        {
+            if (sharpenDelay == null)
+            {
+                sharpenDelay = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(400) };
+                sharpenDelay.Tick += (s, e) => { sharpenDelay.Stop(); if (CoverWidth() != builtCoverWidth) RebuildCards(); };
+            }
+            sharpenDelay.Stop(); sharpenDelay.Start();
+        }
+
         void RebuildCards()
         {
+            builtCoverWidth = CoverWidth();
             selCard = null;
             cards.Clear(); cardTitles.Clear();
             foreach (var g in AllCardGames) cards[g.Id] = NewCard(g);
@@ -554,7 +628,7 @@ namespace TSLauncher
             art.Children.Add(heroImg);
             var heroPath = SafeMode ? null : Covers.Find(best.Id + "_hero");
             if (heroPath != null)
-                ImageCache.Load(W.Dispatcher, heroPath, 1600, false, bmp => { heroImg.Source = bmp; heroImg.BeginAnimation(UIElement.OpacityProperty, new DoubleAnimation(1, new Duration(TimeSpan.FromMilliseconds(250)))); });
+                ImageCache.Load(W.Dispatcher, heroPath, HeroWidth(), false, bmp => { heroImg.Source = bmp; heroImg.BeginAnimation(UIElement.OpacityProperty, new DoubleAnimation(1, new Duration(TimeSpan.FromMilliseconds(250)))); });
             var shade = new Border();
             var sb = new LinearGradientBrush { StartPoint = new Point(0, 0), EndPoint = new Point(1, 0) };
             sb.GradientStops.Add(new GradientStop(Color.FromArgb(240, 14, 13, 26), 0));
@@ -571,7 +645,7 @@ namespace TSLauncher
                 {
                     var img = new Image { Height = 250, Margin = Th(0, 0, 70, 10), HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center };
                     RenderOptions.SetBitmapScalingMode(img, BitmapScalingMode.HighQuality);
-                    ImageCache.Load(W.Dispatcher, coverPath, 440, false, bmp => img.Source = bmp);
+                    ImageCache.Load(W.Dispatcher, coverPath, CoverWidth(), false, bmp => img.Source = bmp);
                     grid.Children.Add(img);
                 }
             }

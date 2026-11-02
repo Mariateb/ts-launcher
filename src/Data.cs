@@ -36,6 +36,9 @@ namespace TSLauncher
         public double? WinLeft, WinTop, WinWidth, WinHeight;
         public bool WinMaximized;
         public bool CheckUpdates = true;
+        public string ThpracPath;
+        public HashSet<string> ThpracGames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        public string BackupDir;   // null = backups folder next to the exe
 
         /// <summary>When true (safe mode) nothing is ever written back to disk.</summary>
         public bool ReadOnly;
@@ -96,6 +99,10 @@ namespace TSLauncher
                 s.WinMaximized = Json.Bool(win, "Maximized") ?? false;
             }
             s.CheckUpdates = Json.Bool(j, "CheckUpdates") ?? true;
+            s.ThpracPath = Json.Str(j, "ThpracPath");
+            foreach (var kv in Dict(j, "ThpracGames")) if (kv.Value is bool && (bool)kv.Value) s.ThpracGames.Add(kv.Key);
+            s.BackupDir = Json.Str(j, "BackupDir");
+            if (string.IsNullOrWhiteSpace(s.BackupDir)) s.BackupDir = null;
             return s;
         }
 
@@ -133,6 +140,9 @@ namespace TSLauncher
                     { "LangGames", new SortedDictionary<string, List<string>>(LangGames.Where(kv => kv.Value.Count > 0).ToDictionary(kv => kv.Key, kv => kv.Value.OrderBy(x => x).ToList()), StringComparer.OrdinalIgnoreCase) },
                     { "Filter", Filter },
                     { "CheckUpdates", CheckUpdates },
+                    { "ThpracPath", ThpracPath },
+                    { "ThpracGames", ThpracGames.OrderBy(x => x).ToDictionary(x => x, x => true) },
+                    { "BackupDir", BackupDir },
                 };
                 if (WinWidth != null && WinHeight != null)
                     o["Window"] = new SortedDictionary<string, object>
@@ -194,6 +204,40 @@ namespace TSLauncher
             else if (from != null) Notice = "Your play-time file was damaged, so it was restored from " + from + ".";
         }
 
+        /// <summary>Raises a game's numbers to at least these values (for imports: nothing gets counted twice).</summary>
+        public void RaiseTo(Dictionary<string, GameStat> incoming)
+        {
+            if (ReadOnly || incoming.Count == 0) return;
+            lock (this)
+            {
+                try
+                {
+                    string ignored;
+                    var fresh = File.Exists(Paths.Playtime) ? SafeFile.LoadWithRecovery(Paths.Playtime, Parse, out ignored) : null;
+                    if (fresh != null) All = fresh;
+                    foreach (var kv in incoming)
+                    {
+                        GameStat g;
+                        if (!All.TryGetValue(kv.Key, out g)) { g = new GameStat(); All[kv.Key] = g; }
+                        g.Seconds = Math.Max(g.Seconds, kv.Value.Seconds);
+                        g.Launches = Math.Max(g.Launches, kv.Value.Launches);
+                        var a = g.LastPlayedDate; var b = kv.Value.LastPlayedDate;
+                        if (b != null && (a == null || b.Value > a.Value)) g.LastPlayed = kv.Value.LastPlayed;
+                    }
+                    Write();
+                }
+                catch (Exception ex) { Log.Error("Stats.RaiseTo", ex); }
+            }
+        }
+
+        void Write()
+        {
+            var o = new SortedDictionary<string, object>(StringComparer.Ordinal);
+            foreach (var kv in All)
+                o[kv.Key] = new SortedDictionary<string, object> { { "Seconds", Math.Round(kv.Value.Seconds, 1) }, { "Launches", kv.Value.Launches }, { "LastPlayed", kv.Value.LastPlayed ?? "" } };
+            SafeFile.WriteAllText(Paths.Playtime, Json.Serialize(o));
+        }
+
         public void Update(string id, double addSeconds, int addLaunches)
         {
             if (ReadOnly) return;
@@ -236,6 +280,16 @@ namespace TSLauncher
             if (ReadOnly || seconds < 1 || start == null) return;
             try { File.AppendAllText(Paths.Sessions, string.Format(Fmt.Inv, "{0};{1};{2}", Fmt.Iso(start.Value), id, (int)seconds) + Environment.NewLine, new UTF8Encoding(false)); }
             catch (Exception ex) { Log.Error("SessionLog.Add", ex); }
+        }
+
+        /// <summary>Adds the sessions of another sessions.csv that aren't in ours yet. Returns how many were added.</summary>
+        public static int MergeFrom(string file)
+        {
+            if (ReadOnly || !File.Exists(file)) return 0;
+            var mine = File.Exists(Paths.Sessions) ? new HashSet<string>(File.ReadAllLines(Paths.Sessions, Encoding.UTF8).Select(l => l.Trim('\uFEFF', ' '))) : new HashSet<string>();
+            var add = File.ReadAllLines(file, Encoding.UTF8).Select(l => l.Trim('\uFEFF', ' ')).Where(l => l.Split(';').Length >= 3 && !mine.Contains(l)).ToList();
+            if (add.Count > 0) File.AppendAllLines(Paths.Sessions, add, new UTF8Encoding(false));
+            return add.Count;
         }
 
         public static List<SessionRecord> Read()

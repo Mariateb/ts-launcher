@@ -11,6 +11,9 @@ A game launcher for the Touhou Project games patched with [thcrap](https://www.t
 - **Save backups**: `score.dat` is copied when a game starts and when it closes (last 10 versions), restorable in two clicks.
 - **Replay browser** that reads difficulty, character, result and score from Touhou 10+ replays; rename, back up, delete, import.
 - **Favorites, sorting, search and quick filters** (played, never played, Steam, local), optional cards for the games you don't own yet.
+- **thprac support**: turn it on per game and thprac (the practice tool) attaches itself when the game starts, still through thcrap in your language.
+- **Screenshots gallery** per game: open, copy to the clipboard, show in folder, delete.
+- **Backups anywhere**: keep save and replay backups in OneDrive / Google Drive, import them on another PC (saves restored to the right place, play time merged), and import the hours Steam recorded.
 - **Language manager**: give configurations friendly names, choose which games offer each one (a patch made for one game stays on that game), hide or delete the ones you don't use, open thcrap to add more.
 - **Updates in one click**: a notice appears when a new release is out, and TS Launcher replaces itself and restarts.
 - **Remembers its window** size, position and maximized state.
@@ -35,8 +38,8 @@ Everything is stored next to `TSLauncher.exe`; nothing is sent anywhere except c
 |---|---|
 | `launcher-settings.json` | Settings, favorites, last language per game, SteamGridDB key |
 | `playtime.json`, `sessions.csv` | Total play time per game, one line per session |
-| `covers/` | Downloaded or custom covers (`th17.png`) and banners (`th17_hero.png`) |
-| `backups/` | Save backups per game, replay backups, and daily copies of the files above (`_launcher/`) |
+| `covers/` | Downloaded or custom covers (`th17.png`) and banners (`th17_hero.png`); `.thumbs/` holds resized copies for a fast start |
+| `backups/` | Save backups per game, replay backups, and daily copies of the files above (`_launcher/`). Can be moved to another folder in Settings > Backups |
 | `logs/`, `tracking.log` | Error reports and play-time detection details |
 
 ## Building
@@ -59,6 +62,7 @@ To release a new version, bump `AssemblyVersion` / `AssemblyFileVersion` (and `A
 | `Tracking.cs`, `Native.cs` | Launching and timing games, process list, controller, `.lnk` files |
 | `Sgdb.cs`, `Extras.cs` | SteamGridDB covers, save backups, replays, sounds |
 | `Update.cs` | Update check and in-place update |
+| `Integrations.cs`, `UiExtras.cs` | thprac, Steam play time, backup folder and import, screenshots |
 | `Ui*.cs`, `Window.xaml` | The interface |
 
 ## Credits

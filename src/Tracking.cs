@@ -17,6 +17,8 @@ namespace TSLauncher
         public DateTime? Start;             // when the game itself started (null until detected)
         public DateTime? ExitedAt;          // set while waiting for a replacement process
         public object Thumb;                // cached thumbnail for the "Now playing" bar
+        public bool Thprac;                 // attach thprac once the game is found
+        public bool ThpracDone;
 
         public bool Detected { get { return Start != null; } }
         public TimeSpan Elapsed
@@ -61,7 +63,7 @@ namespace TSLauncher
     {
         public readonly List<Session> Sessions = new List<Session>();
 
-        static readonly string[] Ignored = { "thcrap", "conhost", "steam", "gameoverlay", "werfault", "explorer", "cmd", "powershell", "tslauncher" };
+        static readonly string[] Ignored = { "thcrap", "thprac", "conhost", "steam", "gameoverlay", "werfault", "explorer", "cmd", "powershell", "tslauncher" };
 
         public Session Begin(Game g, Process proc, DateTime since)
         {

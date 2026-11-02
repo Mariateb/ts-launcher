@@ -140,7 +140,7 @@
           <ControlTemplate TargetType="CheckBox">
             <Border x:Name="b" Background="#222440" BorderBrush="#33365A" BorderThickness="1" CornerRadius="2" Padding="12,7">
               <StackPanel Orientation="Horizontal">
-                <TextBlock Text="&#xE713;" FontFamily="Segoe MDL2 Assets" FontSize="13" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                <TextBlock Text="{TemplateBinding Tag}" FontFamily="Segoe MDL2 Assets" FontSize="13" Margin="0,0,8,0" VerticalAlignment="Center"/>
                 <ContentPresenter VerticalAlignment="Center"/>
               </StackPanel>
             </Border>
@@ -310,13 +310,17 @@
               </LinearGradientBrush>
             </Border.BorderBrush>
             <DockPanel>
-              <CheckBox x:Name="CustomChk" DockPanel.Dock="Left" Style="{StaticResource PillToggle}" Content="Game settings mode"
+              <CheckBox x:Name="ThpracChk" DockPanel.Dock="Left" Style="{StaticResource PillToggle}" Content="thprac" Tag="&#xE916;" Margin="0,0,8,0"
+                        ToolTip="Attach thprac (the practice tool) once the game has started. Remembered for this game."/>
+              <CheckBox x:Name="CustomChk" DockPanel.Dock="Left" Style="{StaticResource PillToggle}" Content="Game settings mode" Tag="&#xE713;"
                         ToolTip="Open the game's own settings program (custom.exe) in the chosen language, instead of the game"/>
               <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
                 <Button x:Name="VanillaBtn" Content="Play original" Style="{StaticResource FlatBtn}" Margin="8,0,0,0"
                         ToolTip="Start the game without any thcrap patch"/>
                 <Button x:Name="CoverBtn" Content="Cover…" Style="{StaticResource FlatBtn}" Margin="8,0,0,0"
                         ToolTip="Pick this game's cover and banner from every option on SteamGridDB, or use your own picture"/>
+                <Button x:Name="ShotsBtn" Content="Screenshots" Style="{StaticResource FlatBtn}" Margin="8,0,0,0"
+                        ToolTip="This game's screenshots: open, copy or delete them"/>
                 <Button x:Name="ReplaysBtn" Content="Replays" Style="{StaticResource FlatBtn}" Margin="8,0,0,0"
                         ToolTip="Browse, rename, back up or delete this game's replays"/>
                 <Button x:Name="SavesBtn" Content="Saves ▾" Style="{StaticResource FlatBtn}" Margin="8,0,0,0"

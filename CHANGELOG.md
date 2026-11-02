@@ -1,5 +1,23 @@
 # Changelog
 
+## 1.3.0 — 2026-11-02
+
+- **thprac support**: a *thprac* button in each game's window (main games 6–20 and Great Fairy Wars). The game starts as usual through thcrap in your language, then `thprac --attach` hooks in. thprac.exe is found automatically near TS Launcher, thcrap or the games, or set in Settings > thprac.
+- **Screenshots** in each game's window: thumbnails of the snapshot folder, click to open, right-click to copy, show in folder or delete.
+- **Backup folder** (Settings > Backups): keep backups in any folder (OneDrive, Google Drive…), existing ones are copied over.
+- **Import backups** from another PC or a copy: adds save and replay backups, optionally restores the newest save of each game (current save backed up first) and merges play time and session history. Restores now put files where this PC keeps the save, even if the backup came from elsewhere.
+- **Import Steam play time** for Steam copies, keeping whichever is higher.
+- Faster:
+  - Covers are kept as small resized copies (`covers/.thumbs`), so they appear almost instantly on every start after the first.
+  - Covers are decoded at the size they're shown (card size and screen DPI), and banners at a single size.
+  - The cover gallery keeps its lists and thumbnails for the session instead of downloading them again after each pick.
+  - Typing in the search bar no longer rebuilds the Continue banner each keystroke.
+  - Hiding a language or choosing its games no longer rescans the disk.
+  - The "Now playing" bar only updates its timers each second.
+  - Without a controller, TS Launcher checks for one every 2 seconds instead of 30 times a second.
+  - With the "Per game" theme, colours change after you rest on a game for a moment, not on every card you sweep past.
+- Fix: a deleted `playtime.json` or `launcher-settings.json` no longer comes back from the daily backups (only a damaged file is recovered).
+
 ## 1.2.1 — 2026-11-02
 
 - Games that aren't from Steam are now labelled **Local** instead of "Folder" (cards, game window, filters).

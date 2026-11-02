@@ -44,6 +44,8 @@ namespace TSLauncher
     public sealed class LibraryResult
     {
         public List<LangInfo> AllLangs = new List<LangInfo>();
+        public List<KeyValuePair<string, string>> Configs = new List<KeyValuePair<string, string>>();
+        public LibraryResult Raw;   // the unfiltered scan this was made from
         public ThcrapInfo Thcrap;
         public List<Game> Games = new List<Game>();
         public List<Game> Unowned = new List<Game>();
@@ -60,7 +62,7 @@ namespace TSLauncher
         static bool IsOwnDataFolder(string dir)
         {
             if (Paths.Root == null) return false;
-            foreach (var own in new[] { Paths.Covers, Paths.Backups, Paths.Logs })
+            foreach (var own in new[] { Paths.Covers, Paths.Backups, Paths.DefaultBackups, Paths.Logs })
                 if (string.Equals(dir.TrimEnd('\\', '/'), own, StringComparison.OrdinalIgnoreCase)) return true;
             return false;
         }
@@ -153,6 +155,12 @@ namespace TSLauncher
         /// <summary>Scans everything (runs on a background thread).</summary>
         public static LibraryResult Build(ThcrapInfo thc, string root, ICollection<string> hidden = null, IDictionary<string, HashSet<string>> onlyFor = null)
         {
+            return Apply(BuildRaw(thc, root), hidden, onlyFor);
+        }
+
+        /// <summary>Scans the disk (runs on a background thread). No language preferences applied.</summary>
+        public static LibraryResult BuildRaw(ThcrapInfo thc, string root)
+        {
             var r = new LibraryResult { Thcrap = thc };
             if (thc == null) return r;
             var games = new Dictionary<string, Game>(StringComparer.OrdinalIgnoreCase);
@@ -176,7 +184,6 @@ namespace TSLauncher
                 }
             }
             catch (Exception ex) { Log.Error("Library configs", ex); }
-            r.ConfigCount = configs.Count;
 
             // Games thcrap knows about (includes Steam copies).
             var gj = ReadJson(Path.Combine(thc.ConfigDir, "games.js"));
@@ -208,15 +215,34 @@ namespace TSLauncher
                 if (s.Custom) l.CustomShortcut = s.Path; else l.Shortcut = s.Path;
             }
 
-            // Languages limited to some games (e.g. a translation made for one game only).
-            if (onlyFor != null && onlyFor.Count > 0)
-                foreach (var g in games.Values)
-                    g.Langs.RemoveAll(l => { HashSet<string> ids; return onlyFor.TryGetValue(l.Code, out ids) && ids.Count > 0 && !ids.Contains(g.Id); });
+            r.Configs = configs.ToList();
+            r.Games = games.Values.OrderBy(g => Catalog.Number(g.Id)).ThenBy(g => g.Id, StringComparer.Ordinal).ToList();
+            return r;
+        }
+
+        /// <summary>
+        /// Applies the language preferences (hidden, per-game) to a raw scan, in memory: changing them
+        /// doesn't need to touch the disk again. Returns new Game objects; the raw scan is left as is.
+        /// </summary>
+        public static LibraryResult Apply(LibraryResult raw, ICollection<string> hidden, IDictionary<string, HashSet<string>> onlyFor)
+        {
+            var r = new LibraryResult { Thcrap = raw.Thcrap, Configs = raw.Configs, Raw = raw };
+            var games = raw.Games.Select(g =>
+            {
+                var c = new Game { Id = g.Id, Exe = g.Exe, CustomExe = g.CustomExe };
+                foreach (var l in g.Langs)
+                {
+                    HashSet<string> ids;
+                    if (onlyFor != null && onlyFor.TryGetValue(l.Code, out ids) && ids.Count > 0 && !ids.Contains(g.Id)) continue;
+                    c.Langs.Add(new LangEntry { Code = l.Code, Config = l.Config, Shortcut = l.Shortcut, CustomShortcut = l.CustomShortcut });
+                }
+                return c;
+            }).ToList();
 
             // Inventory of every language (for the language manager), then drop the hidden ones.
             var inv = new Dictionary<string, LangInfo>(StringComparer.OrdinalIgnoreCase);
-            foreach (var c in configs) inv[c.Key] = new LangInfo { Code = c.Key, Config = c.Value };
-            foreach (var g in games.Values)
+            foreach (var c in raw.Configs) inv[c.Key] = new LangInfo { Code = c.Key, Config = c.Value };
+            foreach (var g in games)
                 foreach (var l in g.Langs)
                 {
                     LangInfo li;
@@ -232,10 +258,9 @@ namespace TSLauncher
             r.AllLangs = inv.Values.OrderBy(x => x.Code, StringComparer.OrdinalIgnoreCase).ToList();
             r.ConfigCount = r.AllLangs.Count(x => !x.Hidden && x.Config != null);
             if (hidden != null && hidden.Count > 0)
-                foreach (var g in games.Values) g.Langs.RemoveAll(l => hidden.Contains(l.Code));
+                foreach (var g in games) g.Langs.RemoveAll(l => hidden.Contains(l.Code));
 
-            r.Games = games.Values.Where(g => g.Exe != null || g.Langs.Count > 0)
-                .OrderBy(g => Catalog.Number(g.Id)).ThenBy(g => g.Id, StringComparer.Ordinal).ToList();
+            r.Games = games.Where(g => g.Exe != null || g.Langs.Count > 0).ToList();
             var have = new HashSet<string>(r.Games.Select(g => g.Id));
             r.Unowned = Catalog.Games.Keys.Where(id => !have.Contains(id)).OrderBy(Catalog.Number)
                 .Select(id => new Game { Id = id, Unowned = true }).ToList();

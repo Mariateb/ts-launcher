@@ -103,19 +103,40 @@ namespace TSLauncher
             catch (Exception ex) { Log.Track(g.Id + ": backup failed: " + ex.Message); return Result.Failed; }
         }
 
-        public static void Restore(string folder)
+        /// <summary>
+        /// Puts a backup back. Files go where this PC keeps them now (so a backup made on another PC, or before the
+        /// game moved folder, still lands in the right place): an existing save with that name, else AppData for
+        /// files that came from AppData, else the game's folder.
+        /// </summary>
+        public static int Restore(string folder, Game g)
         {
             var origin = Path.Combine(folder, "origin.txt");
-            if (!File.Exists(origin)) throw new InvalidOperationException("This backup is missing origin.txt, so its files can't be put back automatically.");
-            foreach (var line in File.ReadAllLines(origin, Encoding.UTF8))
+            var lines = File.Exists(origin) ? File.ReadAllLines(origin, Encoding.UTF8).ToList()
+                      : Directory.GetFiles(folder).Select(Path.GetFileName).Where(f => f != "origin.txt").Select(f => f + "|").ToList();
+            var appdata = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+            var existing = Files(g).ToDictionary(f => f.Name, f => f.FullName, StringComparer.OrdinalIgnoreCase);
+            int n = 0;
+            foreach (var line in lines)
             {
                 var p = line.Split(new[] { '|' }, 2);
-                if (p.Length < 2) continue;
-                var src = Path.Combine(folder, p[0]);
-                if (!File.Exists(src)) continue;
-                Directory.CreateDirectory(Path.GetDirectoryName(p[1]));
-                File.Copy(src, p[1], true);
+                var name = p[0];
+                var src = Path.Combine(folder, name);
+                if (name.Length == 0 || !File.Exists(src)) continue;
+                var was = p.Length > 1 ? p[1] : "";
+                string target;
+                if (!existing.TryGetValue(name, out target))
+                {
+                    if (was.IndexOf("\\ShanghaiAlice\\", StringComparison.OrdinalIgnoreCase) >= 0 && !string.IsNullOrEmpty(appdata))
+                        target = Path.Combine(appdata, "ShanghaiAlice", g.Id, name);
+                    else if (!string.IsNullOrEmpty(g.Exe)) target = Path.Combine(Path.GetDirectoryName(g.Exe), name);
+                    else if (was.Length > 0) target = was;
+                    else continue;
+                }
+                Directory.CreateDirectory(Path.GetDirectoryName(target));
+                File.Copy(src, target, true);
+                n++;
             }
+            return n;
         }
     }
 

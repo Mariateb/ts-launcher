@@ -43,7 +43,7 @@ namespace TSLauncher
                 DlgHeaderGrid.Height = 230;
                 DlgShade.Visibility = Visibility.Visible;
                 var id = g.Id;
-                ImageCache.Load(W.Dispatcher, heroPath, 1100, false, bmp =>
+                ImageCache.Load(W.Dispatcher, heroPath, HeroWidth(), false, bmp =>
                 {
                     if (current != null && current.Id == id) DlgHeader.Background = new ImageBrush(bmp) { Stretch = Stretch.UniformToFill };
                 });
@@ -63,12 +63,12 @@ namespace TSLauncher
             if (g == null) return;
             bool custom = CustomChk.IsChecked ?? false;
             LangHint.Text = g.Langs.Count == 0 ? "No thcrap configuration found for this game. Open thcrap once, pick some patches, then use Refresh in Settings."
-                          : custom ? "OPEN THE GAME SETTINGS (custom.exe) IN…" : "PLAY IN…";
+                          : custom ? "OPEN THE GAME SETTINGS (custom.exe) IN…" : UsesThprac(g) ? "PLAY WITH THPRAC IN…" : "PLAY IN…";
             var last = LastLang(g);
             if (last != null)
             {
                 DlgPlay.Visibility = Visibility.Visible;
-                DlgPlay.Content = (custom ? "⚙   Settings  ·  " : "▶   Play  ·  ") + Langs.Label(last);
+                DlgPlay.Content = (custom ? "⚙   Settings  ·  " : "▶   Play  ·  ") + Langs.Label(last) + (!custom && UsesThprac(g) ? "  ·  thprac" : "");
             }
             else DlgPlay.Visibility = Visibility.Collapsed;
         }
@@ -114,7 +114,7 @@ namespace TSLauncher
                 item("Choose games…", () => ChooseLangGames(code, current));
                 menu.Items.Add(new Separator());
                 item("Rename…", () => { RenameLang(code); if (current != null) ShowPicker(current); });
-                item("Hide everywhere", () => { var g = current; S.HiddenLangs.Add(code); S.Save(); HidePicker(true); Reload(() => { if (g != null) { var fresh = Lib.Games.FirstOrDefault(x => x.Id == g.Id); if (fresh != null) ShowPicker(fresh); } }); });
+                item("Hide everywhere", () => { var g = current; S.HiddenLangs.Add(code); S.Save(); HidePicker(true); ApplyLangPrefs(() => { if (g != null) { var fresh = Lib.Games.FirstOrDefault(x => x.Id == g.Id); if (fresh != null) ShowPicker(fresh); } }); });
                 btn.ContextMenu = menu;
                 btn.ToolTip = (btn.ToolTip as string) + "\nRight-click: choose which games show this language";
             }
@@ -143,6 +143,8 @@ namespace TSLauncher
 
             CustomChk.IsChecked = false;
             CustomChk.Visibility = g.HasCustom ? Visibility.Visible : Visibility.Collapsed;
+            ThpracChk.Visibility = Thprac.Supports(g.Id) && !SafeMode ? Visibility.Visible : Visibility.Collapsed;
+            ThpracChk.IsChecked = UsesThprac(g);
             VanillaBtn.Visibility = g.ExeExists ? Visibility.Visible : Visibility.Collapsed;
             CoverBtn.Visibility = g.InCatalog && !SafeMode ? Visibility.Visible : Visibility.Collapsed;
             UpdateFavButton();
@@ -222,7 +224,8 @@ namespace TSLauncher
         {
             if (!SafeMode) Task.Run(() => Saves.Backup(g));
             Stats.Update(g.Id, 0, 1);
-            Track.Begin(g, proc, since);
+            var session = Track.Begin(g, proc, since);
+            session.Thprac = UsesThprac(g);
             UpdateNowPlaying();
             trackTimer.Start();
             UpdateCard(g);
@@ -236,7 +239,7 @@ namespace TSLauncher
         void TrackTick()
         {
             var r = Track.Tick();
-            foreach (var s in r.Detected) UpdateCard(s.Game);
+            foreach (var s in r.Detected) { UpdateCard(Fresh(s.Game)); AttachThpracLater(s); }
             foreach (var s in r.Ended)
             {
                 double sec = s.Elapsed.TotalSeconds;
@@ -245,7 +248,7 @@ namespace TSLauncher
                 SessionLog.Add(s.Game.Id, s.Start, sec);
                 var game = s.Game;
                 if (!SafeMode) Task.Run(() => Saves.Backup(game));
-                UpdateCard(s.Game);
+                UpdateCard(Fresh(s.Game));
                 if (S.SortMode == "recent" || S.SortMode == "most") ApplySort();
             }
             foreach (var s in r.Lost)
@@ -258,10 +261,32 @@ namespace TSLauncher
             }
         }
 
+        string nowPlayingShape = "";
+        readonly List<Tuple<Session, TextBlock, TextBlock>> nowPlayingClocks = new List<Tuple<Session, TextBlock, TextBlock>>();
+
         void UpdateNowPlaying()
         {
-            NowPlayingPanel.Children.Clear();
             var active = Track.Sessions.ToList();
+            var shape = string.Join("|", active.Select(x => x.Game.Id + ":" + x.Detected + ":" + x.GetHashCode()));
+            if (shape == nowPlayingShape && active.Count > 0)
+            {
+                // same games as last second: only the timers change
+                var tipQuick = new List<string>();
+                foreach (var c in nowPlayingClocks)
+                {
+                    var el = c.Item1.Elapsed;
+                    var st = Stats.Get(c.Item1.Game.Id);
+                    c.Item2.Text = Fmt.Clock(el);
+                    c.Item3.Text = "Total " + Fmt.Duration((st == null ? 0 : st.Seconds) + el.TotalSeconds);
+                    tipQuick.Add("TH" + c.Item1.Game.NumText + "  " + Fmt.Clock(el));
+                }
+                foreach (var s in active.Where(x => !x.Detected)) tipQuick.Add("TH" + s.Game.NumText + "  starting…");
+                SetTrayText(tipQuick);
+                return;
+            }
+            nowPlayingShape = shape;
+            nowPlayingClocks.Clear();
+            NowPlayingPanel.Children.Clear();
             NowPlaying.Visibility = active.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
             var tip = new List<string>();
             foreach (var s in active)
@@ -271,7 +296,7 @@ namespace TSLauncher
                 var img = new Image { Height = 54, MaxWidth = 54, Margin = Th(0, 0, 14, 0) };
                 RenderOptions.SetBitmapScalingMode(img, BitmapScalingMode.HighQuality);
                 var cover = SafeMode ? null : Covers.Find(g.Id);
-                if (cover != null) ImageCache.Load(W.Dispatcher, cover, 440, false, bmp => img.Source = bmp);
+                if (cover != null) ImageCache.Load(W.Dispatcher, cover, CoverWidth(), false, bmp => img.Source = bmp);
                 else ImageCache.LoadIcon(W.Dispatcher, g.Exe, bmp => img.Source = bmp);
                 DockPanel.SetDock(img, Dock.Left);
                 row.Children.Add(img);
@@ -287,6 +312,7 @@ namespace TSLauncher
                     right.Children.Add(clock);
                     var tt = TB("Total " + Fmt.Duration(total + el.TotalSeconds), 11, "#9FD8B4"); tt.HorizontalAlignment = HorizontalAlignment.Right;
                     right.Children.Add(tt);
+                    nowPlayingClocks.Add(Tuple.Create(s, clock, tt));
                     tip.Add("TH" + g.NumText + "  " + Fmt.Clock(el));
                 }
                 else { right.Children.Add(TB("Starting…", 15, "#9FD8B4")); tip.Add("TH" + g.NumText + "  starting…"); }
@@ -299,11 +325,14 @@ namespace TSLauncher
                 row.Children.Add(mid);
                 NowPlayingPanel.Children.Add(row);
             }
-            if (tray != null)
-            {
-                var txt = tip.Count > 0 ? AppInfo.Name + " - " + string.Join(" / ", tip) : AppInfo.Name;
-                tray.Text = txt.Length > 63 ? txt.Substring(0, 63) : txt;
-            }
+            SetTrayText(tip);
+        }
+
+        void SetTrayText(List<string> tip)
+        {
+            if (tray == null) return;
+            var txt = tip.Count > 0 ? AppInfo.Name + " - " + string.Join(" / ", tip) : AppInfo.Name;
+            tray.Text = txt.Length > 63 ? txt.Substring(0, 63) : txt;
         }
 
         // ---------------------------------------------------------------- cover downloads (background)
@@ -417,12 +446,20 @@ namespace TSLauncher
             string key = S.SgdbKey, author = S.SgdbAuthor;
             long known;
             long? sid = S.SgdbIds.TryGetValue(g.Id, out known) ? known : (long?)null;
-            W.Cursor = Cursors.Wait;
-            CoverPanel.Children.Clear();
-            CoverPanel.Children.Add(TB("Loading the covers from SteamGridDB…", 13, "#8E8CA6"));
             pickerMode = "covers";
             LangScroll.Visibility = Visibility.Collapsed; DlgFooter.Visibility = Visibility.Collapsed; CoverScroll.Visibility = Visibility.Visible;
             Sounds.Play("select");
+            Tuple<List<SgdbImage>, List<SgdbImage>> known2;
+            if (galleryLists.TryGetValue(g.Id + "|" + author, out known2))
+            {
+                galleryGrids = known2.Item1; galleryHeroes = known2.Item2;
+                BuildGallery();
+                CoverScroll.ScrollToTop();
+                return;
+            }
+            W.Cursor = Cursors.Wait;
+            CoverPanel.Children.Clear();
+            CoverPanel.Children.Add(TB("Loading the covers from SteamGridDB…", 13, "#8E8CA6"));
             Task.Run(() =>
             {
                 var gid = sid ?? Sgdb.Resolve(g.Title, key);
@@ -441,6 +478,7 @@ namespace TSLauncher
                 }
                 S.SgdbIds[g.Id] = t.Result.Item1; S.Save();
                 galleryGrids = t.Result.Item2; galleryHeroes = t.Result.Item3;
+                galleryLists[g.Id + "|" + author] = Tuple.Create(galleryGrids, galleryHeroes);
                 BuildGallery();
                 CoverScroll.ScrollToTop();
             }, TaskScheduler.FromCurrentSynchronizationContext());
@@ -455,13 +493,9 @@ namespace TSLauncher
             var b = new Border { Width = w, Height = h, CornerRadius = new CornerRadius(2), BorderThickness = Th(2, 2, 2, 2), Background = Br("#222440"), Cursor = Cursors.Hand, ClipToBounds = true };
             b.Uid = inUse ? accentLightHex : "#22FFFFFF";
             b.BorderBrush = Br(b.Uid);
-            try
-            {
-                var bi = new BitmapImage();
-                bi.BeginInit(); bi.UriSource = new Uri(string.IsNullOrEmpty(item.Thumb) ? item.Url : item.Thumb); bi.DecodePixelWidth = (int)(w * 1.5); bi.EndInit();
-                b.Child = new Image { Source = bi, Stretch = Stretch.UniformToFill };
-            }
-            catch { }
+            var img = new Image { Stretch = Stretch.UniformToFill };
+            b.Child = img;
+            LoadGalleryThumb(string.IsNullOrEmpty(item.Thumb) ? item.Url : item.Thumb, (int)(w * 1.5 * DpiScale()), bmp => img.Source = bmp);
             b.MouseEnter += (s, e) => b.BorderBrush = Br(accentHex);
             b.MouseLeave += (s, e) => b.BorderBrush = Br(b.Uid);
             b.MouseLeftButtonUp += (s, e) => Safe("cover", () => ApplyGalleryChoice(item, kind));
@@ -471,6 +505,33 @@ namespace TSLauncher
             l.Margin = Th(2, 5, 0, 0); l.TextTrimming = TextTrimming.CharacterEllipsis;
             outer.Children.Add(l);
             return outer;
+        }
+
+        // gallery lists (per game + artist) and downloaded thumbnails, kept for the whole session
+        readonly Dictionary<string, Tuple<List<SgdbImage>, List<SgdbImage>>> galleryLists = new Dictionary<string, Tuple<List<SgdbImage>, List<SgdbImage>>>();
+        static readonly System.Collections.Concurrent.ConcurrentDictionary<string, BitmapSource> galleryThumbs = new System.Collections.Concurrent.ConcurrentDictionary<string, BitmapSource>();
+        static readonly SemaphoreSlim galleryGate = new SemaphoreSlim(6);
+
+        void LoadGalleryThumb(string url, int width, Action<BitmapSource> done)
+        {
+            if (string.IsNullOrEmpty(url)) return;
+            BitmapSource hit;
+            if (galleryThumbs.TryGetValue(url, out hit)) { done(hit); return; }
+            Task.Run(() =>
+            {
+                galleryGate.Wait();
+                try
+                {
+                    if (galleryThumbs.TryGetValue(url, out hit)) { W.Dispatcher.BeginInvoke(new Action(() => done(hit))); return; }
+                    byte[] bytes;
+                    using (var wc = new System.Net.WebClient()) { wc.Headers["User-Agent"] = "TSLauncher/" + AppInfo.Version; bytes = wc.DownloadData(url); }
+                    var bmp = ImageCache.DecodeBytes(bytes, width);
+                    galleryThumbs[url] = bmp;
+                    W.Dispatcher.BeginInvoke(new Action(() => done(bmp)));
+                }
+                catch (Exception ex) { Log.App("Gallery thumbnail failed: " + ex.Message); }
+                finally { galleryGate.Release(); }
+            });
         }
 
         DockPanel PanelTopBar(params Button[] right)
@@ -707,7 +768,7 @@ namespace TSLauncher
                     if (Track.Sessions.Any(x => x.Game.Id == g.Id)) { ShowError("Close the game before restoring a save."); return; }
                     if (!Confirm("Restore the " + g.Title + " save from " + when + "?\n\nYour current save is backed up first, so you can undo this.", "Restore save")) return;
                     Saves.Backup(g);
-                    Saves.Restore(folder);
+                    Saves.Restore(folder, g);
                     Log.Track(g.Id + ": save restored from " + when);
                     StatusText.Text = g.Title + ": save restored from " + when + ".";
                 }, true);

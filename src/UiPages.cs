@@ -196,6 +196,7 @@ namespace TSLauncher
                 Switch(S.ShowUnowned, v => { S.ShowUnowned = v; S.Save(); RebuildCards(); if (v) StartCoverDownload(false, true); }));
 
             BuildLanguageSection();
+            ThpracSettings();
 
             Section("Playing");
             SettingRow("Close after launch", "Hide in the system tray while you play. Play time is still counted; click the tray icon to see it.",
@@ -225,7 +226,7 @@ namespace TSLauncher
             var slider = new Slider { Minimum = 0.6, Maximum = 1.6, Width = 220, Value = S.CardScale, IsMoveToPointEnabled = true, VerticalAlignment = VerticalAlignment.Center };
             var pct = TB(string.Format(Fmt.Inv, "{0:0}%", S.CardScale * 100), 13, "#D2D0E6"); pct.Width = 48; pct.TextAlignment = TextAlignment.Right; pct.VerticalAlignment = VerticalAlignment.Center;
             slider.ValueChanged += (s, e) => { SetCardScale(slider.Value); pct.Text = string.Format(Fmt.Inv, "{0:0}%", S.CardScale * 100); };
-            slider.LostMouseCapture += (s, e) => S.Save();
+            slider.LostMouseCapture += (s, e) => { S.Save(); SharpenCoversLater(); };
             SettingRow("Card size", "How big the game covers are. Ctrl + mouse wheel works too.", slider, pct);
 
             Section("Sounds");
@@ -253,6 +254,9 @@ namespace TSLauncher
             dl.IsEnabled = coverRun == null && !SafeMode; re.IsEnabled = coverRun == null && !SafeMode && !string.IsNullOrEmpty(S.SgdbKey);
             SettingRow("Cover images", "You can also drop your own th06.png / th17.jpg (and thXX_hero.png banners) in the covers folder.",
                 dl, re, FlatBtn("Open folder", () => { Directory.CreateDirectory(Paths.Covers); OpenFolder(Paths.Covers); }));
+
+            Section("Backups");
+            BackupSettings();
 
             Section("Your data");
             SettingRow("Launcher folder", "Settings, play time, session history, save backups and covers are stored next to TSLauncher.exe. The settings and play-time files are written safely and backed up every day automatically.",
@@ -374,7 +378,7 @@ namespace TSLauncher
             S.Save();
             Sounds.Play("toggle");
             if (reopen != null) HidePicker(true);
-            Reload(() =>
+            ApplyLangPrefs(() =>
             {
                 if (reopen == null) return;
                 var fresh = Lib.Games.FirstOrDefault(x => x.Id == reopen.Id);
@@ -442,7 +446,7 @@ namespace TSLauncher
             if (!S.HiddenLangs.Remove(code)) S.HiddenLangs.Add(code);
             S.Save();
             Sounds.Play("toggle");
-            Reload();
+            ApplyLangPrefs();
         }
 
         void DeleteLang(LangInfo info)
@@ -529,12 +533,24 @@ namespace TSLauncher
             Para("Time is counted while a game started from TS Launcher is running, whether the window is open or hidden in the tray (\"Close after launch\" in Settings). Closing the window during a game also sends it to the tray so nothing is lost. The session ends when the game closes; there is a short grace period in case the game restarts itself (Steam does this).");
             Para("Games started some other way are not counted. If a game's time stays at 0, tracking.log (Settings > Your data) shows what TS Launcher saw. The Stats page has your totals, a weekly chart and recent sessions.");
 
+            Section("thprac");
+            Para("thprac is the practice tool most Touhou players use (practice any stage, infinite lives, replay tools…). In a game's window, turn on the thprac button: from then on that game starts as usual (through thcrap, in your language) and thprac attaches itself a couple of seconds later. It works for the main games 6 to 20 and Great Fairy Wars, local or Steam copies.");
+            Para("TS Launcher finds thprac.exe if it's next to TS Launcher, thcrap or your games; otherwise show it where it is in Settings > thprac. You can download thprac from its GitHub page (Settings > thprac > Download).");
+
             Section("Covers");
             Para("Covers and banners come from SteamGridDB and need a free API key (Settings > Covers). Covers by your preferred artist are used first, telanus by default. Cover… in a game's window shows all the options. You can also use your own pictures: name them th06.png, th17.jpg and so on (thXX_hero.png for the wide banner) and put them in the covers folder.");
 
             Section("Replays and save backups");
             Para("Replays in a game's window lists that game's replay files, newest first. For Touhou 10 and later it also shows the difficulty, character, result, player name and score. You can rename, back up or delete them (deleted replays go to the Recycle Bin), and add replay files someone shared with you.");
             Para("Each game's save (score.dat and its settings file) is copied to the backups folder when the game starts and when it closes. The last 10 different versions are kept. To go back to one, open the game, click Saves and pick a date: your current save is backed up first, so a restore can always be undone.");
+
+            Section("Screenshots");
+            Para("Screenshots in a game's window shows the pictures the game saved (its snapshot folder), newest first. Click one to open it; right-click to copy it (to paste in Discord or anywhere), show it in its folder or delete it.");
+
+            Section("Backups on another PC, and Steam hours");
+            Para("Settings > Backups > Backup folder lets you keep the backups in a folder of your choice, for example in OneDrive or Google Drive, so they follow you to every PC. Your existing backups are copied there.");
+            Para("Import (same section) brings in backups from another PC or a copy: it adds the save and replay backups, can restore the newest save of each game (your current save is backed up first), and can bring back your play time and session history. When a save is restored, it goes where this PC keeps that game's save now, even if the backup was made elsewhere.");
+            Para("Steam play time imports the hours Steam recorded for your Steam copies. For each game the higher number is kept, so time isn't counted twice.");
 
             Section("If something goes wrong");
             Para("If TS Launcher hits an error it shows what happened and writes a report in the logs folder. If it fails while starting, the next start offers safe mode: your settings stay untouched and covers, sounds and the controller are off, so you can still play. Your settings and play-time files are written safely (never half-written) and backed up every day; if one gets damaged it is restored from a backup automatically.");

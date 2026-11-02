@@ -41,7 +41,8 @@ namespace TSLauncher
         Grid Overlay, DlgHeaderGrid, SetupOverlay;
         Border Dialog, DlgHeader, DlgShade, NowPlaying, ContinueBanner, DlgFooter, HeaderBar, BottomBar, NoticeBar, SetupCard;
         Image DlgIcon;
-        CheckBox CustomChk;
+        CheckBox CustomChk, ThpracChk;
+        Button ShotsBtn;
         UniformGrid LangPanel;
         ScrollViewer MainScroll, StatsScroll, LangScroll, CoverScroll;
         Rectangle SearchLine;
@@ -75,7 +76,7 @@ namespace TSLauncher
             Dialog = F<Border>("Dialog"); DlgHeader = F<Border>("DlgHeader"); DlgShade = F<Border>("DlgShade"); NowPlaying = F<Border>("NowPlaying");
             ContinueBanner = F<Border>("ContinueBanner"); DlgFooter = F<Border>("DlgFooter"); HeaderBar = F<Border>("HeaderBar"); BottomBar = F<Border>("BottomBar");
             NoticeBar = F<Border>("NoticeBar"); SetupCard = F<Border>("SetupCard");
-            DlgIcon = F<Image>("DlgIcon"); CustomChk = F<CheckBox>("CustomChk"); LangPanel = F<UniformGrid>("LangPanel");
+            DlgIcon = F<Image>("DlgIcon"); CustomChk = F<CheckBox>("CustomChk"); ThpracChk = F<CheckBox>("ThpracChk"); ShotsBtn = F<Button>("ShotsBtn"); LangPanel = F<UniformGrid>("LangPanel");
             MainScroll = F<ScrollViewer>("MainScroll"); StatsScroll = F<ScrollViewer>("StatsScroll"); LangScroll = F<ScrollViewer>("LangScroll"); CoverScroll = F<ScrollViewer>("CoverScroll");
             SearchLine = F<Rectangle>("SearchLine");
 
@@ -109,8 +110,13 @@ namespace TSLauncher
             }
             else
             {
-                SafeFile.DailySnapshot();
                 S = AppSettings.Load(out settingsNotice);
+                if (S.BackupDir != null)
+                {
+                    if (Directory.Exists(S.BackupDir)) Paths.CustomBackups = S.BackupDir;
+                    else settingsNotice = settingsNotice ?? ("Your backup folder (" + S.BackupDir + ") isn't available right now, so backups go to the folder next to TSLauncher.exe until it's back.");
+                }
+                SafeFile.DailySnapshot();
             }
             Stats.Load();
             Langs.Custom = new Dictionary<string, string>(S.LangNames, StringComparer.OrdinalIgnoreCase);
@@ -235,7 +241,7 @@ namespace TSLauncher
             }).ContinueWith(t =>
             {
                 if (version != reloadVersion) return;
-                if (t.IsFaulted) { Log.Error("Reload", t.Exception); Lib = new LibraryResult(); }
+                if (t.IsFaulted) { Log.Error("Reload", t.Exception); Lib = new LibraryResult(); Lib.Raw = Lib; }
                 else Lib = t.Result;
                 RebuildCards();
                 if (Lib.Thcrap == null) StatusText.Text = "thcrap not found - set its folder in Settings";
@@ -244,6 +250,23 @@ namespace TSLauncher
                 if (after != null) after();
             }, TaskScheduler.FromCurrentSynchronizationContext());
         }
+
+        /// <summary>Re-applies hidden / per-game languages to the last scan, without touching the disk.</summary>
+        void ApplyLangPrefs(Action after = null)
+        {
+            var hidden = new HashSet<string>(S.HiddenLangs, StringComparer.OrdinalIgnoreCase);
+            var onlyFor = S.LangGames.ToDictionary(kv => kv.Key, kv => new HashSet<string>(kv.Value), StringComparer.OrdinalIgnoreCase);
+            Lib = Library.Apply(Lib.Raw ?? Lib, hidden, onlyFor);
+            RebuildCards();
+            if (Lib.Thcrap != null) StatusText.Text = Fmt.Plural(Lib.Games.Count, "game", "games") + "  ·  " + Fmt.Plural(Lib.ConfigCount, "language", "languages");
+            if (View == "settings") BuildSettingsPage();
+            if (after != null) after();
+        }
+
+        /// <summary>The current Game object for an id (objects are replaced when preferences change).</summary>
+        Game Fresh(Game g) { return g == null ? null : Lib.Games.FirstOrDefault(x => x.Id == g.Id) ?? g; }
+
+        bool searchWasEmpty = true;
 
         // ---------------------------------------------------------------- notices
         Action noticeAction;
@@ -396,7 +419,22 @@ namespace TSLauncher
             }
         }
 
-        void FollowGameTheme(Game g) { if (S.Theme == "game" && g != null) ApplyAccent(GameAccent(g)); }
+        DispatcherTimer themeDelay;
+        Game themePending;
+
+        /// <summary>immediate: right away (opening a game); otherwise after 150 ms of pointing at the same game.</summary>
+        void FollowGameTheme(Game g, bool immediate = true)
+        {
+            if (S.Theme != "game" || g == null) return;
+            if (immediate) { if (themeDelay != null) themeDelay.Stop(); ApplyAccent(GameAccent(g)); return; }
+            themePending = g;
+            if (themeDelay == null)
+            {
+                themeDelay = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(150) };
+                themeDelay.Tick += (s, e) => { themeDelay.Stop(); if (themePending != null) ApplyAccent(GameAccent(themePending)); };
+            }
+            themeDelay.Stop(); themeDelay.Start();
+        }
 
         void SetTheme(string name)
         {
@@ -481,7 +519,12 @@ namespace TSLauncher
                 if (queuedNotices.Count > 0) queuedNotices.Dequeue()();
             };
             NoticeAction.Click += (s, e) => { if (noticeAction != null) Safe("notice", noticeAction); };
-            SearchBox.TextChanged += (s, e) => { ApplyFilter(); UpdateContinue(); };
+            SearchBox.TextChanged += (s, e) =>
+            {
+                ApplyFilter();
+                bool empty = SearchBox.Text.Trim().Length == 0;
+                if (empty != searchWasEmpty) { searchWasEmpty = empty; UpdateContinue(); }
+            };
             SearchBox.GotKeyboardFocus += (s, e) => SearchLine.Opacity = 1;
             SearchBox.LostKeyboardFocus += (s, e) => SearchLine.Opacity = 0.45;
             SortBtn.Click += (s, e) => ShowSortMenu();
@@ -507,6 +550,8 @@ namespace TSLauncher
             VanillaBtn.Click += (s, e) => Safe("play original", LaunchOriginal);
             CoverBtn.Click += (s, e) => Safe("covers", ShowCoverGallery);
             ReplaysBtn.Click += (s, e) => Safe("replays", ShowReplays);
+            ShotsBtn.Click += (s, e) => Safe("screenshots", ShowScreenshots);
+            ThpracChk.Click += (s, e) => Safe("thprac", ToggleThprac);
             SavesBtn.Click += (s, e) => Safe("saves", ShowSavesMenu);
             Overlay.MouseLeftButtonDown += (s, e) => { if (e.OriginalSource == Overlay) HidePicker(); };
             W.SizeChanged += (s, e) => { if (Overlay.Visibility == Visibility.Visible) FitDialog(); };
@@ -553,7 +598,7 @@ namespace TSLauncher
             var mods = Keyboard.Modifiers;
             if ((mods & ModifierKeys.Control) != 0)
             {
-                SetCardScale(S.CardScale + (e.Delta > 0 ? 0.1 : -0.1)); S.Save();
+                SetCardScale(S.CardScale + (e.Delta > 0 ? 0.1 : -0.1)); S.Save(); SharpenCoversLater();
                 if (View == "settings") BuildSettingsPage();
                 e.Handled = true; return;
             }
@@ -675,7 +720,7 @@ namespace TSLauncher
         }
 
         // Controller: polled only while the window is active, so the game never gets doubled input.
-        int padIndex = -1, padPrev, padScan;
+        int padIndex = -1, padPrev;
         string padDir;
         DateTime padDirSince, padDirLast;
         static readonly int[] PadMasks = { Pad.A, Pad.B, Pad.X, Pad.Y, Pad.LB, Pad.RB, Pad.Start, Pad.Back };
@@ -687,12 +732,12 @@ namespace TSLauncher
             int b, lx, ly;
             if (padIndex < 0)
             {
-                if (padScan-- > 0) return;
-                padScan = 30;   // look for a controller about once a second
+                // no controller: look for one every 2 seconds instead of waking up 30 times a second
                 for (int i = 0; i < 4; i++) if (Pad.Read(i, out b, out lx, out ly)) { padIndex = i; padPrev = b; break; }
+                padTimer.Interval = TimeSpan.FromMilliseconds(padIndex >= 0 ? 33 : 2000);
                 return;
             }
-            if (!Pad.Read(padIndex, out b, out lx, out ly)) { padIndex = -1; return; }
+            if (!Pad.Read(padIndex, out b, out lx, out ly)) { padIndex = -1; padTimer.Interval = TimeSpan.FromMilliseconds(2000); return; }
             int pressed = b & ~padPrev;
             padPrev = b;
             for (int i = 0; i < PadMasks.Length; i++) if ((pressed & PadMasks[i]) != 0) Nav(PadKeys[i], false);

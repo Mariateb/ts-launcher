@@ -24,12 +24,16 @@ namespace TSLauncher
         public static string Playtime { get { return Path.Combine(Root, "playtime.json"); } }
         public static string Sessions { get { return Path.Combine(Root, "sessions.csv"); } }
         public static string Covers { get { return Path.Combine(Root, "covers"); } }
-        public static string Backups { get { return Path.Combine(Root, "backups"); } }
+        /// <summary>The backups folder: next to the exe unless another one was chosen (e.g. in OneDrive).</summary>
+        public static string Backups { get { return string.IsNullOrEmpty(CustomBackups) ? DefaultBackups : CustomBackups; } }
+        public static string DefaultBackups { get { return Path.Combine(Root, "backups"); } }
+        public static string CustomBackups;
         public static string DataBackups { get { return Path.Combine(Backups, "_launcher"); } }
         public static string Logs { get { return Path.Combine(Root, "logs"); } }
         public static string TrackLog { get { return Path.Combine(Root, "tracking.log"); } }
         public static string AppLog { get { return Path.Combine(Logs, "app.log"); } }
         public static string StartupMarker { get { return Path.Combine(Logs, "starting.lock"); } }
+        public static string Thumbs { get { return Path.Combine(Covers, ".thumbs"); } }
 
         public static void Init(string root)
         {
@@ -206,6 +210,9 @@ namespace TSLauncher
         {
             recoveredFrom = null;
             bool existed = File.Exists(path);
+            // A missing file is a first start or a deliberate reset (deleted on purpose), never damage:
+            // only a file that exists but can't be read is recovered from backups.
+            if (!existed) return null;
             var candidates = new List<KeyValuePair<string, string>>();
             candidates.Add(new KeyValuePair<string, string>(path, null));
             candidates.Add(new KeyValuePair<string, string>(path + ".bak", "its automatic backup copy"));
