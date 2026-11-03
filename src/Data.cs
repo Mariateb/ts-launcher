@@ -39,6 +39,8 @@ namespace TSLauncher
         public string ThpracPath;
         public HashSet<string> ThpracGames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         public string BackupDir;   // null = backups folder next to the exe
+        /// <summary>Picture behind the library: "focus" (the game you're on), "none", or "game:thXX" (always that game).</summary>
+        public string Background = "focus";
 
         /// <summary>When true (safe mode) nothing is ever written back to disk.</summary>
         public bool ReadOnly;
@@ -101,6 +103,8 @@ namespace TSLauncher
             s.CheckUpdates = Json.Bool(j, "CheckUpdates") ?? true;
             s.ThpracPath = Json.Str(j, "ThpracPath");
             foreach (var kv in Dict(j, "ThpracGames")) if (kv.Value is bool && (bool)kv.Value) s.ThpracGames.Add(kv.Key);
+            var bg = Json.Str(j, "Background");
+            if (bg == "focus" || bg == "none" || (bg != null && bg.StartsWith("game:") && bg.Length > 5)) s.Background = bg;
             s.BackupDir = Json.Str(j, "BackupDir");
             if (string.IsNullOrWhiteSpace(s.BackupDir)) s.BackupDir = null;
             return s;
@@ -143,6 +147,7 @@ namespace TSLauncher
                     { "ThpracPath", ThpracPath },
                     { "ThpracGames", ThpracGames.OrderBy(x => x).ToDictionary(x => x, x => true) },
                     { "BackupDir", BackupDir },
+                    { "Background", Background },
                 };
                 if (WinWidth != null && WinHeight != null)
                     o["Window"] = new SortedDictionary<string, object>

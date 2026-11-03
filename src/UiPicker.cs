@@ -125,6 +125,7 @@ namespace TSLauncher
         {
             current = g;
             FollowGameTheme(g);
+            FollowBackground(g, true);
             FitDialog();
             ShowLangMode();
             SetPickerHeader(g);
@@ -164,6 +165,7 @@ namespace TSLauncher
             UpdatePickerMode();
             LangScroll.ScrollToTop();
             Overlay.Visibility = Visibility.Visible;
+            UpdateHints();
             langSel = 0;
             W.Dispatcher.BeginInvoke(DispatcherPriority.Loaded, new Action(() => SetLangSel(0, true)));
             Sounds.Play("select");
@@ -173,6 +175,8 @@ namespace TSLauncher
         {
             if (!silent && Overlay.Visibility == Visibility.Visible) Sounds.Play("back");
             Overlay.Visibility = Visibility.Collapsed;
+            UpdateHints();
+            if (View == "library") FollowBackground(selCard != null ? (Game)selCard.Tag : continueGame, false);
         }
 
         void SetLangSel(int i, bool quiet = false)

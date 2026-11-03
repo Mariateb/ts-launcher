@@ -6,6 +6,7 @@ A game launcher for the Touhou Project games patched with [thcrap](https://www.t
 
 - **One library for everything thcrap knows**: games come from thcrap's `games.js`, languages from your thcrap configurations (`en`, `fr`, `en-lol`, ...), plus any `thXX (lang)` shortcuts you already have.
 - **Covers and banners** from [SteamGridDB](https://www.steamgriddb.com) (free API key), preferring the artist of your choice; pick any cover from a gallery or use your own picture.
+- **Big Picture-style home**: navigation on the left, your recent games up top (the last one as a large tile), covers that show their name when you land on them, and an optional blurred cover or banner as the background.
 - **Language grid** for each game, with your last language one click (or one Enter) away, plus game settings mode (`custom.exe`) and "play original".
 - **Play time tracking** that follows thcrap's loader and Steam relaunches, a "Now playing" bar, hiding in the tray while you play, a stats page with weekly charts and session history.
 - **Save backups**: `score.dat` is copied when a game starts and when it closes (last 10 versions), restorable in two clicks.
@@ -14,7 +15,7 @@ A game launcher for the Touhou Project games patched with [thcrap](https://www.t
 - **thprac support**: turn it on per game and thprac (the practice tool) attaches itself when the game starts, still through thcrap in your language.
 - **Screenshots gallery** per game: open, copy to the clipboard, show in folder, delete.
 - **Backups anywhere**: keep save and replay backups in OneDrive / Google Drive, import them on another PC (saves restored to the right place, play time merged), and import the hours Steam recorded.
-- **Language manager**: give configurations friendly names, choose which games offer each one (a patch made for one game stays on that game), hide or delete the ones you don't use, open thcrap to add more.
+- **Language manager** (its own Languages tab): give configurations friendly names, choose which games offer each one (a patch made for one game stays on that game), hide or delete the ones you don't use, open thcrap to add more.
 - **Updates in one click**: a notice appears when a new release is out, and TS Launcher replaces itself and restarts.
 - **Remembers its window** size, position and maximized state.
 - **Keyboard and Xbox controller navigation**, menu sounds, accent themes (including one that follows each game's colour).

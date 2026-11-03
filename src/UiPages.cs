@@ -16,17 +16,24 @@ namespace TSLauncher
     public sealed partial class LauncherWindow
     {
         // ---------------------------------------------------------------- page building blocks
+        /// <summary>Rebuilds the page you're on (Settings or Languages) after something changed.</summary>
+        void RefreshPage()
+        {
+            if (View == "settings") BuildSettingsPage();
+            else if (View == "languages") BuildLanguagesPage();
+        }
+
         void PageHeader(string title, string sub)
         {
             StatsPanel.Children.Clear();
-            StatsPanel.Children.Add(TB(title, 28, "#F0EEF8", FontWeights.SemiBold));
-            if (sub != null) StatsPanel.Children.Add(TB(sub, 12, "#6E6C86"));
+            StatsPanel.Children.Add(TB(title, 34, "#FFFFFF", FontWeights.Bold));
+            if (sub != null) { var t = TB(sub, 13, "#8E90A6"); t.Margin = Th(0, 4, 0, 0); StatsPanel.Children.Add(t); }
         }
 
         void Section(string title)
         {
-            var tb = TB(title, 17, "#F0EEF8", FontWeights.SemiBold);
-            tb.Margin = StatsPanel.Children.Count <= 2 ? Th(0, 22, 0, 12) : Th(0, 30, 0, 12);
+            var tb = TB(title, 15, "#C9CBDA", FontWeights.Bold);
+            tb.Margin = StatsPanel.Children.Count <= 2 ? Th(0, 26, 0, 4) : Th(0, 34, 0, 4);
             StatsPanel.Children.Add(tb);
         }
 
@@ -39,7 +46,8 @@ namespace TSLauncher
 
         void SettingRow(string title, string desc, params UIElement[] controls)
         {
-            var card = new Border { Background = Br("#191A2E"), BorderBrush = Br("#272A44"), BorderThickness = Th(1, 1, 1, 1), CornerRadius = new CornerRadius(2), Padding = Th(18, 13, 18, 13), Margin = Th(0, 0, 0, 8) };
+            // a plain row with a hairline under it, like a console settings list
+            var card = new Border { Background = Br("#00FFFFFF"), BorderBrush = Br("#14FFFFFF"), BorderThickness = Th(0, 0, 0, 1), Padding = Th(0, 15, 0, 15) };
             var dp = new DockPanel();
             if (controls != null && controls.Length > 0)
             {
@@ -49,8 +57,8 @@ namespace TSLauncher
                 dp.Children.Add(right);
             }
             var left = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
-            left.Children.Add(TB(title, 14, "#F0EEF8", FontWeights.SemiBold));
-            if (desc != null) { var d = TB(desc, 12, "#8E8CA6"); d.TextWrapping = TextWrapping.Wrap; d.Margin = Th(0, 3, 0, 0); left.Children.Add(d); }
+            left.Children.Add(TB(title, 15, "#F0EEF8", FontWeights.SemiBold));
+            if (desc != null) { var d = TB(desc, 12, "#8E90A6"); d.TextWrapping = TextWrapping.Wrap; d.Margin = Th(0, 3, 0, 0); left.Children.Add(d); }
             dp.Children.Add(left);
             card.Child = dp;
             StatsPanel.Children.Add(card);
@@ -58,16 +66,16 @@ namespace TSLauncher
 
         CheckBox Switch(bool on, Action<bool> changed)
         {
-            var c = new CheckBox { IsChecked = on, VerticalAlignment = VerticalAlignment.Center, LayoutTransform = new ScaleTransform(1.4, 1.4), IsEnabled = !SafeMode };
+            var c = new CheckBox { IsChecked = on, VerticalAlignment = VerticalAlignment.Center, Style = (Style)W.FindResource("SwitchToggle"), IsEnabled = !SafeMode };
             c.Click += (s, e) => Safe("setting", () => changed(c.IsChecked ?? false));
             return c;
         }
 
         Border Tile(string label, string value, string sub)
         {
-            var b = new Border { Background = Br("#191A2E"), BorderBrush = Br("#272A44"), BorderThickness = Th(1, 1, 1, 1), CornerRadius = new CornerRadius(2), Padding = Th(18, 16, 18, 16), Margin = Th(0, 0, 12, 0) };
+            var b = new Border { Background = Br("#14FFFFFF"), CornerRadius = new CornerRadius(4), Padding = Th(18, 16, 18, 16), Margin = Th(0, 0, 12, 0) };
             var sp = new StackPanel();
-            sp.Children.Add(TB(label.ToUpperInvariant(), 11, "#8E8CA6", FontWeights.SemiBold));
+            sp.Children.Add(TB(label, 12, "#A6A8BC", FontWeights.SemiBold));
             var v = TB(value, 26, "#F0EEF8", FontWeights.SemiBold); v.Margin = Th(0, 6, 0, 2); v.TextTrimming = TextTrimming.CharacterEllipsis;
             sp.Children.Add(v);
             var s = TB(sub, 12, "#8E8CA6"); s.TextTrimming = TextTrimming.CharacterEllipsis;
@@ -79,7 +87,7 @@ namespace TSLauncher
         // ---------------------------------------------------------------- stats
         void BuildStatsPage()
         {
-            PageHeader("Your stats", "Esc or the library button below to go back");
+            PageHeader("Your stats", "Esc or Library on the left to go back");
             var all = Stats.All;
             double total = all.Values.Sum(x => x.Seconds);
             int launches = all.Values.Sum(x => x.Launches);
@@ -184,7 +192,7 @@ namespace TSLauncher
         // ---------------------------------------------------------------- settings
         void BuildSettingsPage()
         {
-            PageHeader("Settings", SafeMode ? "Safe mode: changes are disabled until you restart normally." : "Esc or the library button below to go back");
+            PageHeader("Settings", SafeMode ? "Safe mode: changes are disabled until you restart normally." : "Esc or Library on the left to go back");
 
             Section("Library");
             SettingRow("thcrap folder", Lib.Thcrap != null ? Lib.Thcrap.Root : "Not found yet",
@@ -195,7 +203,6 @@ namespace TSLauncher
             SettingRow("Show games I don't own", "Adds the missing games as greyed-out cards that link to the Steam store.",
                 Switch(S.ShowUnowned, v => { S.ShowUnowned = v; S.Save(); RebuildCards(); if (v) StartCoverDownload(false, true); }));
 
-            BuildLanguageSection();
             ThpracSettings();
 
             Section("Playing");
@@ -227,6 +234,8 @@ namespace TSLauncher
             var pct = TB(string.Format(Fmt.Inv, "{0:0}%", S.CardScale * 100), 13, "#D2D0E6"); pct.Width = 48; pct.TextAlignment = TextAlignment.Right; pct.VerticalAlignment = VerticalAlignment.Center;
             slider.ValueChanged += (s, e) => { SetCardScale(slider.Value); pct.Text = string.Format(Fmt.Inv, "{0:0}%", S.CardScale * 100); };
             slider.LostMouseCapture += (s, e) => { S.Save(); SharpenCoversLater(); };
+            SettingRow("Background picture", BackgroundDesc(), BackgroundButtons());
+
             SettingRow("Card size", "How big the game covers are. Ctrl + mouse wheel works too.", slider, pct);
 
             Section("Sounds");
@@ -278,9 +287,57 @@ namespace TSLauncher
         // ---------------------------------------------------------------- language manager
         bool thcrapOpened;
 
+        void BuildLanguagesPage()
+        {
+            PageHeader("Languages", SafeMode ? "Safe mode: changes are disabled until you restart normally." : "The languages each game offers when you open it. Esc or Library on the left to go back.");
+            var top = StatsPanel.Children.Count;
+            BuildLanguageSection();
+            if (StatsPanel.Children.Count > top) ((FrameworkElement)StatsPanel.Children[top]).Margin = Th(0, 18, 0, 0);
+        }
+
+        // ---------------------------------------------------------------- background picture setting
+        string BackgroundDesc()
+        {
+            var mode = S.Background ?? "focus";
+            if (mode == "none") return "Off: a plain background.";
+            if (mode.StartsWith("game:")) return "Always " + Catalog.Title(mode.Substring(5)) + " (its banner, or its cover), blurred behind the library.";
+            return "The game you're on, blurred behind the library (its banner, or its cover).";
+        }
+
+        UIElement BackgroundButtons()
+        {
+            var sp = new StackPanel { Orientation = Orientation.Horizontal };
+            var mode = S.Background ?? "focus";
+            Action<string> set = m =>
+            {
+                S.Background = m; S.Save();
+                FollowBackground(m == "none" ? null : continueGame, true);
+                BuildSettingsPage();
+            };
+            var off = FlatBtn("Off", () => set("none"));
+            var focus = FlatBtn("Game you're on", () => set("focus"));
+            var pick = FlatBtn(mode.StartsWith("game:") ? Catalog.Short(mode.Substring(5)) + "  ▾" : "Choose game…  ▾", () => { });
+            pick.Click += (s, e) =>
+            {
+                var menu = new ContextMenu { PlacementTarget = pick, Placement = PlacementMode.Bottom };
+                foreach (var g in Lib.Games.Concat(Lib.Unowned).Where(x => Covers.Find(x.Id) != null || Covers.Find(x.Id + "_hero") != null).OrderBy(x => Catalog.Number(x.Id)))
+                {
+                    var id = g.Id;
+                    var mi = new MenuItem { Header = "Touhou " + g.NumText + "  ·  " + g.Title, IsCheckable = true, IsChecked = mode == "game:" + id };
+                    mi.Click += (s2, e2) => Safe("background", () => set("game:" + id));
+                    menu.Items.Add(mi);
+                }
+                if (menu.Items.Count == 0) menu.Items.Add(new MenuItem { Header = "No covers yet: download them in Covers below", IsEnabled = false });
+                menu.IsOpen = true;
+            };
+            var sel = mode == "none" ? off : mode == "focus" ? focus : pick;
+            sel.Background = Br("#ECEBF5"); sel.Foreground = Br("#14151F");
+            foreach (var b in new[] { off, focus, pick }) { b.IsEnabled = !SafeMode; b.Margin = Th(6, 0, 0, 0); sp.Children.Add(b); }
+            return sp;
+        }
+
         void BuildLanguageSection()
         {
-            Section("Languages");
             var thcrapExe = Library.ThcrapExe(Lib.Thcrap);
             var open = FlatBtn("Open thcrap", OpenThcrap);
             open.IsEnabled = thcrapExe != null && !SafeMode;
@@ -356,7 +413,7 @@ namespace TSLauncher
             Langs.Custom = new Dictionary<string, string>(S.LangNames, StringComparer.OrdinalIgnoreCase);
             S.Save();
             RebuildCards();
-            if (View == "settings") BuildSettingsPage();
+            RefreshPage();
         }
 
         void RenameLang(string code)
@@ -384,7 +441,7 @@ namespace TSLauncher
                 var fresh = Lib.Games.FirstOrDefault(x => x.Id == reopen.Id);
                 if (fresh != null) ShowPicker(fresh);
             });
-            if (set != null && set.Count == 0) StatusText.Text = Langs.Label(code) + " isn't offered in any game now (Settings > Languages to change it).";
+            if (set != null && set.Count == 0) StatusText.Text = Langs.Label(code) + " isn't offered in any game now (the Languages tab can change that).";
         }
 
         void ChooseLangGames(string code, Game reopen)
@@ -495,11 +552,11 @@ namespace TSLauncher
 
         void BuildHelpPage()
         {
-            PageHeader("Help", "Esc or the library button below to go back");
+            PageHeader("Help", "Esc or Library on the left to go back");
             Section("The basics");
             Para("TS Launcher reads your thcrap setup. Every game thcrap knows about shows up here, and every configuration you made in thcrap (en, fr, en-lol...) becomes a language you can pick. Games found through Steam are labelled \"Steam\", the others \"Local\".");
-            Para("A game is missing? Open thcrap, let it search for games (or point it to the game's folder), then use Refresh in Settings. A language is missing? Settings > Languages > Open thcrap: create a configuration with the patches you want, and it appears in every game when you come back.");
-            Para("Settings > Languages also lets you give a language a friendlier name (for example \"French (TSA)\" instead of base_tsa-MoFrance), choose which games offer it (Games…, handy for a patch made for one game only), hide the ones you don't use, or delete a configuration (it goes to the Recycle Bin).");
+            Para("A game is missing? Open thcrap, let it search for games (or point it to the game's folder), then use Refresh in Settings. A language is missing? In the Languages tab, use Open thcrap: create a configuration with the patches you want, and it appears in every game when you come back.");
+            Para("The Languages tab also lets you give a language a friendlier name (for example \"French (TSA)\" instead of base_tsa-MoFrance), choose which games offer it (Games…, handy for a patch made for one game only), hide the ones you don't use, or delete a configuration (it goes to the Recycle Bin).");
             Para("Quicker: right-click a language in a game's window and choose \"Only show in this game\" or \"Don't show in this game\".");
             Para("The filters above your games (Played, Never played, Steam, Local) narrow the library down; All shows everything again.");
 

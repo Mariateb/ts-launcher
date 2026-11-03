@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.3.2 — 2026-11-03
+
+A new look, inspired by Steam's Big Picture mode. No change to how games, languages or your data work.
+
+- **Navigation on the left**: Library, Languages, Stats, Settings and Help are now in a sidebar instead of the bottom bar. LB / RB on a controller still switch pages.
+- **Languages has its own tab**, so renaming, hiding or limiting a language to certain games is no longer buried in Settings.
+- **New home**: your last game is shown as a wide tile at the top, followed by the others you played recently. Its name, when you last played, your play time and your language appear underneath.
+- **Background picture**: the game you're on shows blurred behind the library (its banner, or its cover). In Settings > Appearance you can turn it off or always use one game.
+- **Cleaner cards**: covers show only their art until you land on one. Then it zooms slightly with a white outline, and its name and details appear.
+- Simpler filters and sort shown as tabs, flatter buttons, on/off switches in Settings, and button hints at the bottom right, as on a console.
+
 ## 1.3.0 — 2026-11-02
 
 - **thprac support**: a *thprac* button in each game's window (main games 6–20 and Great Fairy Wars). The game starts as usual through thcrap in your language, then `thprac --attach` hooks in. thprac.exe is found automatically near TS Launcher, thcrap or the games, or set in Settings > thprac.

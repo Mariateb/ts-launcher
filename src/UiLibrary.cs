@@ -153,13 +153,15 @@ namespace TSLauncher
         sealed class Shelf { public string Name; public StackPanel Box, Row; public TextBlock Title; public ScrollViewer Scroll; }
 
         readonly Dictionary<string, Border> cards = new Dictionary<string, Border>();
-        readonly Dictionary<string, TextBlock> cardTitles = new Dictionary<string, TextBlock>();
+        /// <summary>Per card: the caption shown on focus, and whether the card belongs to the recent row.</summary>
+        sealed class CardParts { public Border Strip; public bool KeepStrip, Recent; }
+        readonly Dictionary<Border, CardParts> cardParts = new Dictionary<Border, CardParts>();
+        Shelf recentShelf;
         readonly List<Shelf> shelves = new List<Shelf>();
         ScaleTransform cardScale;
         Border selCard;
         ScrollViewer hoverShelf;
         Game continueGame;
-        Button playBtn, otherBtn;
 
         IEnumerable<Game> AllCardGames { get { return S.ShowUnowned ? Lib.Games.Concat(Lib.Unowned) : Lib.Games; } }
         string LastLang(Game g) { string l; return g != null && S.LastLang.TryGetValue(g.Id, out l) && g.Lang(l) != null ? l : null; }
@@ -205,40 +207,54 @@ namespace TSLauncher
         static T Frozen<T>(T b) where T : Freezable { b.Freeze(); return b; }
 
         // ---------------------------------------------------------------- cards
-        Border NewCard(Game g)
+        /// <summary>
+        /// A game tile. At rest it's only the art (Big Picture style); its caption appears when focused.
+        /// recent: a tile of the recent row (no caption, the line under the row names it). wide: the featured tile.
+        /// </summary>
+        Border NewCard(Game g, bool recent = false, bool wide = false)
         {
             var color = Col(Catalog.ColorHex(g.Id));
             bool unowned = g.Unowned;
             var coverPath = SafeMode ? null : Covers.Find(g.Id);
-            bool hasCover = coverPath != null;
+            var heroPath = wide && !SafeMode ? Covers.Find(g.Id + "_hero") : null;
+            bool hasArt = wide ? (heroPath != null || coverPath != null) : coverPath != null;
             bool playing = SessionOf(g) != null;
             bool fav = S.Favorites.Contains(g.Id);
 
             var card = new Border
             {
-                Width = 200, Height = 300, CornerRadius = new CornerRadius(3), Margin = Th(4, 0, 4, 0),
-                Cursor = Cursors.Hand, BorderThickness = Th(2, 2, 2, 2), Tag = g, ClipToBounds = false,
+                Width = wide ? 620 : 200, Height = 300, CornerRadius = new CornerRadius(4), Margin = Th(5, 0, 5, 0),
+                Cursor = Cursors.Hand, BorderThickness = Th(3, 3, 3, 3), Tag = g, ClipToBounds = false,
                 RenderTransform = new ScaleTransform(1, 1), RenderTransformOrigin = new Point(0.5, 0.5),
                 Background = Frozen(new LinearGradientBrush(color, Mix(color, Colors.Black, 0.78), 65)),
                 ToolTip = unowned ? "Touhou " + g.NumText + " - " + g.Title + "\nNot in your library - click to look it up on Steam"
-                                  : "Touhou " + g.NumText + " - " + g.Title + "\nClick: choose language  ·  Right-click: replay last language  ·  F: favorite",
+                                  : "Touhou " + g.NumText + " - " + g.Title + "\nClick: choose language  ·  Right-click: play in your last language  ·  F: favorite",
             };
             if (unowned) card.Opacity = 0.5;
-            card.Uid = playing ? "#AA5BE08A" : "#22FFFFFF";
+            card.Uid = playing ? "#CC5BE08A" : "#00FFFFFF";   // resting border: invisible, green while playing
             card.BorderBrush = Br(card.Uid);
 
             var grid = new Grid();
             var art = new Image { Stretch = Stretch.UniformToFill, Opacity = 0 };
             RenderOptions.SetBitmapScalingMode(art, BitmapScalingMode.HighQuality);
-            var artClip = new Border { CornerRadius = new CornerRadius(2), ClipToBounds = true, Child = art };
-            grid.Children.Add(artClip);
-            if (hasCover)
-                ImageCache.Load(W.Dispatcher, coverPath, CoverWidth(), unowned, bmp =>
-                {
-                    art.Source = bmp;
-                    art.BeginAnimation(UIElement.OpacityProperty, new DoubleAnimation(1, new Duration(TimeSpan.FromMilliseconds(220))));
-                });
-            else
+            grid.Children.Add(new Border { CornerRadius = new CornerRadius(2), ClipToBounds = true, Child = art });
+            Action<BitmapSource> show = bmp =>
+            {
+                art.Source = bmp;
+                art.BeginAnimation(UIElement.OpacityProperty, new DoubleAnimation(1, new Duration(TimeSpan.FromMilliseconds(220))));
+            };
+            if (wide && heroPath != null) ImageCache.Load(W.Dispatcher, heroPath, HeroTileWidth(), false, show);
+            else if (wide && coverPath != null)
+            {
+                // no banner: the cover on the right of a colour wash, the title on the left
+                art.HorizontalAlignment = HorizontalAlignment.Right; art.Width = 200; art.Stretch = Stretch.UniformToFill;
+                ImageCache.Load(W.Dispatcher, coverPath, CoverWidth(), false, show);
+                var wt = TB(g.Title, 26, "#FFFFFFFF", FontWeights.Bold);
+                wt.TextWrapping = TextWrapping.Wrap; wt.Margin = Th(26, 0, 230, 26); wt.VerticalAlignment = VerticalAlignment.Bottom;
+                grid.Children.Add(wt);
+            }
+            else if (coverPath != null) ImageCache.Load(W.Dispatcher, coverPath, CoverWidth(), unowned, show);
+            if (!hasArt)
             {
                 var kanji = TB("東方", 92, "#14FFFFFF", FontWeights.Bold);
                 kanji.HorizontalAlignment = HorizontalAlignment.Right; kanji.VerticalAlignment = VerticalAlignment.Center;
@@ -261,44 +277,42 @@ namespace TSLauncher
                     ImageCache.LoadIcon(W.Dispatcher, g.Exe, bmp => icon.Source = bmp);
                 }
             }
-            if (fav)
+            if (fav && !recent)
             {
-                var starB = new Border { Background = Br("#B0000000"), CornerRadius = new CornerRadius(3), Width = 28, Height = 28, Margin = Th(0, 8, 8, 0), HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Top };
-                var star = TB("★", 16, "#FFD75E"); star.HorizontalAlignment = HorizontalAlignment.Center; star.VerticalAlignment = VerticalAlignment.Center;
-                starB.Child = star;
-                grid.Children.Add(starB);
+                var star = TB("★", 15, "#FFD75E");
+                star.HorizontalAlignment = HorizontalAlignment.Right; star.VerticalAlignment = VerticalAlignment.Top; star.Margin = Th(0, 8, 10, 0);
+                star.Effect = new DropShadowEffect { BlurRadius = 6, ShadowDepth = 0, Opacity = 0.9 };
+                grid.Children.Add(star);
+            }
+            if (playing)
+            {
+                var live = new Border { Background = Br("#E62A7A45"), CornerRadius = new CornerRadius(3), Padding = Th(7, 3, 8, 3), Margin = Th(8, 8, 0, 0), HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Top };
+                live.Child = TB("PLAYING", 10, "#FFFFFF", FontWeights.Bold);
+                grid.Children.Add(live);
             }
 
-            var strip = new Border { VerticalAlignment = VerticalAlignment.Bottom, CornerRadius = new CornerRadius(0, 0, 2, 2), Padding = Th(12, 26, 12, 12) };
-            var sb = new LinearGradientBrush { StartPoint = new Point(0, 0), EndPoint = new Point(0, 1) };
-            sb.GradientStops.Add(new GradientStop(Color.FromArgb(0, 0, 0, 0), 0));
-            sb.GradientStops.Add(new GradientStop(Color.FromArgb(235, 12, 11, 22), 0.45));
-            strip.Background = Frozen(sb);
-            var sp = new StackPanel();
-            if (hasCover)
+            var parts = new CardParts { Recent = recent };
+            if (!recent)
             {
-                strip.Padding = Th(12, 22, 12, 10);
-                var tt = TB(g.Title, 15, "#FFFFFFFF", FontWeights.SemiBold);
-                tt.TextWrapping = TextWrapping.Wrap; tt.Margin = Th(0, 0, 0, 5); tt.Visibility = Visibility.Collapsed;
-                tt.Effect = new DropShadowEffect { BlurRadius = 6, ShadowDepth = 0, Opacity = 1 };
-                sp.Children.Add(tt);
-                cardTitles[g.Id] = tt;
-            }
-            else
-            {
-                sp.Children.Add(TB("TOUHOU " + g.NumText, 11, "#B8FFFFFF", FontWeights.SemiBold));
+                var strip = new Border { VerticalAlignment = VerticalAlignment.Bottom, CornerRadius = new CornerRadius(0, 0, 2, 2), Padding = Th(12, 30, 12, 11) };
+                var sb = new LinearGradientBrush { StartPoint = new Point(0, 0), EndPoint = new Point(0, 1) };
+                sb.GradientStops.Add(new GradientStop(Color.FromArgb(0, 0, 0, 0), 0));
+                sb.GradientStops.Add(new GradientStop(Color.FromArgb(240, 10, 11, 20), 0.5));
+                strip.Background = Frozen(sb);
+                var sp = new StackPanel();
+                if (!hasArt) sp.Children.Add(TB("TOUHOU " + g.NumText, 11, "#B8FFFFFF", FontWeights.SemiBold));
                 var t = TB(g.Title, 15, "#FFFFFFFF", FontWeights.SemiBold);
-                t.TextWrapping = TextWrapping.Wrap; t.Margin = Th(0, 2, 0, 6);
+                t.TextWrapping = TextWrapping.Wrap; t.Margin = Th(0, hasArt ? 0 : 2, 0, 5);
                 sp.Children.Add(t);
+                sp.Children.Add(unowned ? TB("Not owned  ·  find on Steam", 12, "#C6D4DF", FontWeights.SemiBold) : TB(BadgeText(g), 12, baseLightHex));
+                if (!unowned) { var stat = TB(StatLine(g), 11, "#A8FFFFFF"); stat.Margin = Th(0, 2, 0, 0); sp.Children.Add(stat); }
+                strip.Child = sp;
+                parts.Strip = strip;
+                parts.KeepStrip = !hasArt;   // a tile without art keeps its name visible
+                strip.Visibility = parts.KeepStrip ? Visibility.Visible : Visibility.Collapsed;
+                grid.Children.Add(strip);
             }
-            sp.Children.Add(unowned ? TB("Not owned", 12, "#C6D4DF", FontWeights.SemiBold)
-                          : playing ? TB("●  Playing now", 12, "#5BE08A", FontWeights.SemiBold)
-                          : TB(BadgeText(g), 12, baseLightHex));
-            var stat = TB(unowned ? "Find on Steam  ↗" : StatLine(g), 11, "#A8FFFFFF");
-            stat.Margin = Th(0, 2, 0, 0);
-            sp.Children.Add(stat);
-            strip.Child = sp;
-            grid.Children.Add(strip);
+            cardParts[card] = parts;
             card.Child = grid;
 
             card.MouseEnter += (s, e) => SetGlow(card, true);
@@ -306,6 +320,12 @@ namespace TSLauncher
             card.MouseLeftButtonUp += (s, e) => Safe("open game", () => OpenCard(g));
             card.MouseRightButtonUp += (s, e) => Safe("play", () => { if (g.Unowned) OpenStore(g); else PlayLast(g); });
             return card;
+        }
+
+        int HeroTileWidth()
+        {
+            double px = 620 * Math.Max(1.0, S.CardScale) * 1.05 * DpiScale();
+            return (int)Math.Max(640, Math.Min(2000, Math.Ceiling(px / 160) * 160));
         }
 
         static void Scale(UIElement el, double to)
@@ -316,49 +336,77 @@ namespace TSLauncher
             st.BeginAnimation(ScaleTransform.ScaleYProperty, a);
         }
 
+        static readonly DropShadowEffect FocusGlow = MakeFocusGlow();
+        static DropShadowEffect MakeFocusGlow()
+        {
+            var e = new DropShadowEffect { Color = Colors.White, BlurRadius = 24, ShadowDepth = 0, Opacity = 0.35 };
+            e.Freeze();
+            return e;
+        }
+
+        /// <summary>Big Picture focus: a slight zoom, a white outline and a soft white glow.</summary>
         void SetGlow(Border card, bool on)
         {
             var g = (Game)card.Tag;
-            TextBlock title;
-            cardTitles.TryGetValue(g.Id, out title);
+            CardParts parts;
+            cardParts.TryGetValue(card, out parts);
             if (on)
             {
                 FollowGameTheme(g, false);
+                FollowBackground(g, false);
                 Sounds.Play("move");
-                card.Effect = new DropShadowEffect { Color = accentLight, BlurRadius = 26, ShadowDepth = 0, Opacity = 0.9 };
-                var pulse = new SolidColorBrush(Colors.White);
-                pulse.BeginAnimation(SolidColorBrush.ColorProperty, new ColorAnimation(Colors.White, accentLight, new Duration(TimeSpan.FromMilliseconds(750))) { AutoReverse = true, RepeatBehavior = RepeatBehavior.Forever });
-                card.BorderBrush = pulse;
-                card.BorderThickness = Th(3, 3, 3, 3);
-                Scale(card, 1.06);
-                if (title != null) title.Visibility = Visibility.Visible;
+                card.Effect = FocusGlow;
+                card.BorderBrush = Br("#FFFFFFFF");
+                Scale(card, 1.05);
+                if (parts != null && parts.Strip != null) parts.Strip.Visibility = Visibility.Visible;
+                if (parts != null && parts.Recent) ShowFocusCaption(g);
             }
             else
             {
-                card.Effect = null;   // a blurred shadow on every card is costly to redraw; only the focused one glows
+                card.Effect = null;
                 card.BorderBrush = Br(card.Uid);
-                card.BorderThickness = Th(2, 2, 2, 2);
                 Scale(card, 1.0);
-                if (title != null) title.Visibility = Visibility.Collapsed;
+                if (parts != null && parts.Strip != null && !parts.KeepStrip) parts.Strip.Visibility = Visibility.Collapsed;
             }
+        }
+
+        /// <summary>The big line under the recent row: name, then last played, time and language.</summary>
+        void ShowFocusCaption(Game g)
+        {
+            if (g == null) { FocusTitle.Text = ""; FocusInfo.Inlines.Clear(); return; }
+            FocusTitle.Text = g.Title;
+            FocusInfo.Inlines.Clear();
+            var st = Stats.Get(g.Id);
+            if (SessionOf(g) != null)
+            {
+                FocusInfo.Inlines.Add(new System.Windows.Documents.Run("●  PLAYING NOW") { Foreground = Br("#5BE08A") });
+                return;
+            }
+            var parts = new List<string>();
+            var ago = st == null ? null : Fmt.Ago(st.LastPlayedDate);
+            if (ago != null) parts.Add("LAST PLAYED " + ago.ToUpperInvariant());
+            if (st != null && st.Played) parts.Add(Fmt.Duration(st.Seconds).ToUpperInvariant());
+            var last = LastLang(g);
+            if (last != null) parts.Add(Langs.Label(last).ToUpperInvariant());
+            if (UsesThprac(g)) parts.Add("THPRAC");
+            FocusInfo.Inlines.Add(new System.Windows.Documents.Run("▶  ") { Foreground = Br("#5BE08A") });
+            FocusInfo.Inlines.Add(new System.Windows.Documents.Run(parts.Count > 0 ? string.Join("   ", parts) : "NOT PLAYED YET"));
         }
 
         // ---------------------------------------------------------------- rows
         Shelf NewShelf(string name)
         {
             var sh = new Shelf { Name = name, Box = new StackPanel { Margin = Th(0, 0, 0, 2) } };
-            var head = new StackPanel { Margin = Th(24, 10, 24, 0) };
-            sh.Title = TB(name, 12, "#8E8CA6", FontWeights.SemiBold);
-            head.Children.Add(sh.Title);
-            var lb = new LinearGradientBrush { StartPoint = new Point(0, 0), EndPoint = new Point(1, 0) };
-            lb.GradientStops.Add(new GradientStop(Color.FromArgb(110, accentLight.R, accentLight.G, accentLight.B), 0));
-            lb.GradientStops.Add(new GradientStop(Color.FromArgb(0, accentLight.R, accentLight.G, accentLight.B), 0.7));
-            head.Children.Add(new Rectangle { Height = 1, Margin = Th(0, 6, 0, 0), Fill = lb });
-            sh.Box.Children.Add(head);
+            if (name != null)
+            {
+                sh.Title = TB(name, 14, "#C9CBDA", FontWeights.Bold);
+                sh.Title.Margin = Th(29, 18, 24, 0);
+                sh.Box.Children.Add(sh.Title);
+            }
 
             var frame = new Grid();
             sh.Scroll = new ScrollViewer { HorizontalScrollBarVisibility = ScrollBarVisibility.Hidden, VerticalScrollBarVisibility = ScrollBarVisibility.Disabled, Focusable = false };
-            sh.Row = new StackPanel { Orientation = Orientation.Horizontal, Margin = Th(20, 14, 20, 16), LayoutTransform = cardScale };
+            sh.Row = new StackPanel { Orientation = Orientation.Horizontal, Margin = Th(19, 14, 24, 16), LayoutTransform = cardScale };
             sh.Scroll.Content = sh.Row;
             frame.Children.Add(sh.Scroll);
 
@@ -366,14 +414,14 @@ namespace TSLauncher
             foreach (int dir in new[] { -1, 1 })
             {
                 var gb = new LinearGradientBrush { StartPoint = new Point(dir < 0 ? 0 : 1, 0), EndPoint = new Point(dir < 0 ? 1 : 0, 0) };
-                gb.GradientStops.Add(new GradientStop(Color.FromArgb(235, 13, 13, 24), 0));
-                gb.GradientStops.Add(new GradientStop(Color.FromArgb(0, 13, 13, 24), 1));
+                gb.GradientStops.Add(new GradientStop(Color.FromArgb(235, 15, 17, 34), 0));
+                gb.GradientStops.Add(new GradientStop(Color.FromArgb(0, 15, 17, 34), 1));
                 var chev = TB(dir < 0 ? "" : "", 24, "#F0EEF8");
                 chev.FontFamily = new FontFamily("Segoe MDL2 Assets");
                 chev.VerticalAlignment = VerticalAlignment.Center; chev.HorizontalAlignment = dir < 0 ? HorizontalAlignment.Left : HorizontalAlignment.Right; chev.Margin = Th(18, 0, 18, 0);
                 var a = new Border { Width = 84, HorizontalAlignment = dir < 0 ? HorizontalAlignment.Left : HorizontalAlignment.Right, Cursor = Cursors.Hand, Background = gb, Child = chev, Visibility = Visibility.Collapsed };
                 int d = dir; var sv = sh.Scroll;
-                a.MouseEnter += (s, e) => chev.Foreground = Br(accentLightHex);
+                a.MouseEnter += (s, e) => chev.Foreground = Br("#FFFFFF");
                 a.MouseLeave += (s, e) => chev.Foreground = Br("#F0EEF8");
                 a.MouseLeftButtonUp += (s, e) => { ScrollBy(sv, true, d * sv.ViewportWidth * 0.8); e.Handled = true; };
                 frame.Children.Add(a);
@@ -428,7 +476,7 @@ namespace TSLauncher
         {
             builtCoverWidth = CoverWidth();
             selCard = null;
-            cards.Clear(); cardTitles.Clear();
+            cards.Clear(); cardParts.Clear();
             foreach (var g in AllCardGames) cards[g.Id] = NewCard(g);
             UpdateContinue();
             ApplySort();
@@ -437,8 +485,9 @@ namespace TSLauncher
         void ApplySort()
         {
             string label;
-            SortBtn.Content = "Sort: " + (SortNames.TryGetValue(S.SortMode, out label) ? label : "Release order") + "  ▾";
+            SortBtn.Content = (SortNames.TryGetValue(S.SortMode, out label) ? label : "Release order").ToUpperInvariant() + "  ▾";
             foreach (var c in cards.Values) { var p = c.Parent as Panel; if (p != null) p.Children.Remove(c); }
+            foreach (var c in cardParts.Keys.Where(k => !cardParts[k].Recent && !cards.ContainsValue(k)).ToList()) cardParts.Remove(c);
             GamePanel.Children.Clear();
             shelves.Clear();
             var groups = new List<KeyValuePair<string, List<Game>>>
@@ -467,30 +516,27 @@ namespace TSLauncher
 
         void BuildFilterChips()
         {
-            var bar = SortBtn.Parent as Panel;
-            if (bar == null) return;
-            var chips = new StackPanel { Orientation = Orientation.Horizontal, Margin = Th(0, 0, 14, 0), VerticalAlignment = VerticalAlignment.Center };
+            FilterTabs.Children.Clear();
+            filterChips.Clear();
             foreach (var k in FilterKeys)
             {
                 var key = k;
-                var b = new Button { Content = FilterNames[key], Style = (Style)W.FindResource("FlatBtn"), Padding = Th(12, 5, 12, 5), Margin = Th(0, 0, 6, 0), FontSize = 12, Focusable = false };
+                var b = new Button { Content = FilterNames[key].ToUpperInvariant(), Style = (Style)W.FindResource("TabBtn") };
                 b.Click += (s, e) => { S.Filter = key; S.Save(); Sounds.Play("toggle"); UpdateFilterChips(); ApplyFilter(); };
-                chips.Children.Add(b);
+                FilterTabs.Children.Add(b);
                 filterChips[key] = b;
             }
-            bar.Children.Insert(0, chips);
             UpdateFilterChips();
         }
 
         void UpdateFilterChips()
         {
-            if (S == null || string.IsNullOrEmpty(accentHex)) return;
+            if (S == null) return;
             foreach (var kv in filterChips)
             {
                 bool on = kv.Key == (S.Filter ?? "all");
-                kv.Value.Background = Br(on ? accentHex : "#272A44");
-                kv.Value.BorderBrush = Br(on ? accentLightHex : "#383C5E");
-                kv.Value.Foreground = Br(on ? "#FFFFFF" : "#D2D0E6");
+                kv.Value.Background = Br(on ? "#2EFFFFFF" : "#00FFFFFF");
+                kv.Value.Foreground = Br(on ? "#FFFFFF" : "#B4B6C8");
             }
         }
 
@@ -531,13 +577,12 @@ namespace TSLauncher
             {
                 int n = sh.Row.Children.Cast<UIElement>().Count(c => c.Visibility == Visibility.Visible);
                 sh.Box.Visibility = n > 0 ? Visibility.Visible : Visibility.Collapsed;
-                sh.Title.Text = sh.Name + "   ·   " + n;
+                if (sh.Title != null) sh.Title.Text = sh.Name;
             }
             if (selCard != null && selCard.Visibility != Visibility.Visible) SetSelection(null);
             var label = q.Length > 0 ? Fmt.Plural(shown, "result", "results") + " for \"" + q + "\"" : Fmt.Plural(shown, "game", "games");
-            if (shownUnowned > 0) label += "  ·  " + shownUnowned + " not owned";
-            if ((S.Filter ?? "all") != "all") label += "  ·  showing " + FilterNames[S.Filter].ToLowerInvariant();
-            if (Lib.Thcrap == null && q.Length == 0) label = "No games yet: TS Launcher needs to know where thcrap is (Settings > Library).";
+            if (shownUnowned > 0) label += ", " + shownUnowned + " not owned";
+            if (Lib.Thcrap == null && q.Length == 0) label = "No games yet: set your thcrap folder in Settings.";
             LibLabel.Text = label;
         }
 
@@ -554,6 +599,7 @@ namespace TSLauncher
                 fresh.Visibility = old.Visibility;
             }
             cards[g.Id] = fresh;
+            if (old != null) cardParts.Remove(old);
             if (old != null && selCard == old) { selCard = null; SetSelection(fresh); }
             if (!g.Unowned) UpdateContinue();
             if ((S.Filter ?? "all") != "all") ApplyFilter();   // e.g. a first launch moves it out of "Never played"
@@ -602,91 +648,50 @@ namespace TSLauncher
                 System.Diagnostics.Process.Start("https://store.steampowered.com/search/?term=" + Uri.EscapeDataString("Touhou " + g.Title));
         }
 
-        // ---------------------------------------------------------------- Continue banner
+        // ---------------------------------------------------------------- recent row (Big Picture home)
+        /// <summary>
+        /// The top row: your last game as a wide featured tile, then the next games you played most recently.
+        /// The line under the row names whichever of them is focused.
+        /// </summary>
         void UpdateContinue()
         {
-            Game best = null; DateTime bestT = DateTime.MinValue;
-            foreach (var g in Lib.Games)
+            var played = Lib.Games
+                .Select(g => { var st = Stats.Get(g.Id); return new { g, d = st == null ? null : st.LastPlayedDate }; })
+                .Where(x => x.d != null).OrderByDescending(x => x.d.Value).Select(x => x.g).ToList();
+            continueGame = played.FirstOrDefault();
+
+            string keepId = null;
+            CardParts sp;
+            if (selCard != null && cardParts.TryGetValue(selCard, out sp) && sp.Recent) keepId = ((Game)selCard.Tag).Id;
+            if (recentShelf != null)
+                foreach (var c in recentShelf.Row.Children.OfType<Border>().ToList()) cardParts.Remove(c);
+            RecentHost.Children.Clear();
+            recentShelf = null;
+            if (continueGame == null || SearchBox.Text.Trim().Length > 0) { RecentPanel.Visibility = Visibility.Collapsed; return; }
+
+            recentShelf = NewShelf(null);
+            recentShelf.Row.Margin = Th(19, 10, 24, 14);
+            Border keep = null;
+            for (int i = 0; i < Math.Min(8, played.Count); i++)
             {
-                var st = Stats.Get(g.Id); var d = st == null ? null : st.LastPlayedDate;
-                if (d != null && d.Value > bestT) { bestT = d.Value; best = g; }
+                var c = NewCard(played[i], true, i == 0);
+                recentShelf.Row.Children.Add(c);
+                if (played[i].Id == keepId) keep = c;
             }
-            continueGame = best;
-            ContinueBanner.Child = null;
-            if (best == null || SearchBox.Text.Trim().Length > 0) { ContinueBanner.Visibility = Visibility.Collapsed; return; }
-
-            var c = Col(Catalog.ColorHex(best.Id));
-            var grid = new Grid();
-            var art = new Grid();
-            var mask = new LinearGradientBrush { StartPoint = new Point(0, 0), EndPoint = new Point(0, 1) };
-            mask.GradientStops.Add(new GradientStop(Color.FromArgb(255, 0, 0, 0), 0.5));
-            mask.GradientStops.Add(new GradientStop(Color.FromArgb(0, 0, 0, 0), 1));
-            art.OpacityMask = mask;
-            var artBg = new Border { Background = new LinearGradientBrush(c, Mix(c, Colors.Black, 0.8), 0) };
-            art.Children.Add(artBg);
-            var heroImg = new Image { Stretch = Stretch.UniformToFill, Opacity = 0 };
-            art.Children.Add(heroImg);
-            var heroPath = SafeMode ? null : Covers.Find(best.Id + "_hero");
-            if (heroPath != null)
-                ImageCache.Load(W.Dispatcher, heroPath, HeroWidth(), false, bmp => { heroImg.Source = bmp; heroImg.BeginAnimation(UIElement.OpacityProperty, new DoubleAnimation(1, new Duration(TimeSpan.FromMilliseconds(250)))); });
-            var shade = new Border();
-            var sb = new LinearGradientBrush { StartPoint = new Point(0, 0), EndPoint = new Point(1, 0) };
-            sb.GradientStops.Add(new GradientStop(Color.FromArgb(240, 14, 13, 26), 0));
-            sb.GradientStops.Add(new GradientStop(Color.FromArgb(170, 14, 13, 26), 0.5));
-            sb.GradientStops.Add(new GradientStop(Color.FromArgb(10, 14, 13, 26), 1));
-            shade.Background = sb;
-            art.Children.Add(shade);
-            grid.Children.Add(art);
-
-            if (heroPath == null && !SafeMode)
-            {
-                var coverPath = Covers.Find(best.Id);
-                if (coverPath != null)
-                {
-                    var img = new Image { Height = 250, Margin = Th(0, 0, 70, 10), HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center };
-                    RenderOptions.SetBitmapScalingMode(img, BitmapScalingMode.HighQuality);
-                    ImageCache.Load(W.Dispatcher, coverPath, CoverWidth(), false, bmp => img.Source = bmp);
-                    grid.Children.Add(img);
-                }
-            }
-
-            var sp = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = Th(40, 0, 40, 10), HorizontalAlignment = HorizontalAlignment.Left };
-            sp.Children.Add(TB("CONTINUE PLAYING", 12, baseLightHex, FontWeights.SemiBold));
-            var n = TB("TOUHOU " + best.NumText, 12, "#C8FFFFFF", FontWeights.SemiBold); n.Margin = Th(0, 8, 0, 0);
-            sp.Children.Add(n);
-            var t = TB(best.Title, 36, "#FFFFFFFF", FontWeights.SemiBold);
-            t.TextWrapping = TextWrapping.Wrap; t.MaxWidth = 720;
-            t.Effect = new DropShadowEffect { BlurRadius = 10, ShadowDepth = 0, Opacity = 0.8 };
-            sp.Children.Add(t);
-            var stt = Stats.Get(best.Id);
-            var parts = new List<string>();
-            var ago = Fmt.Ago(stt.LastPlayedDate); if (ago != null) parts.Add("Last played " + ago);
-            parts.Add(Fmt.Duration(stt.Seconds) + " played");
-            var last = LastLang(best); if (last != null) parts.Add(Langs.Label(last));
-            var info = TB(string.Join("   ·   ", parts), 13, "#D8FFFFFF"); info.Margin = Th(0, 6, 0, 0);
-            sp.Children.Add(info);
-
-            var btns = new StackPanel { Orientation = Orientation.Horizontal, Margin = Th(0, 18, 0, 0) };
-            playBtn = new Button { Style = (Style)W.FindResource("AccentBtn"), Content = last != null ? "▶   Play" : "▶   Play…" };
-            var game = best;
-            playBtn.Click += (s, e) => Safe("play", () => PlayLast(game));
-            btns.Children.Add(playBtn);
-            otherBtn = new Button { Style = (Style)W.FindResource("FlatBtn"), Content = "Choose language", Margin = Th(10, 0, 0, 0), Padding = Th(18, 10, 18, 10), Background = Br("#66000000"), BorderBrush = Br("#55FFFFFF") };
-            otherBtn.Click += (s, e) => Safe("open game", () => ShowPicker(game));
-            btns.Children.Add(otherBtn);
-            sp.Children.Add(btns);
-            grid.Children.Add(sp);
-
-            ContinueBanner.Background = null;
-            ContinueBanner.Child = grid;
-            ContinueBanner.Visibility = Visibility.Visible;
+            RecentHost.Children.Add(recentShelf.Box);
+            RecentPanel.Visibility = Visibility.Visible;
+            ShowFocusCaption(keep != null ? (Game)keep.Tag : continueGame);
+            if (keep != null) { selCard = null; SetSelection(keep); }
         }
 
         // ---------------------------------------------------------------- keyboard selection
         List<List<Border>> CardRows()
         {
             var rows = new List<List<Border>>();
-            foreach (var sh in shelves)
+            var all = new List<Shelf>();
+            if (recentShelf != null && RecentPanel.Visibility == Visibility.Visible) all.Add(recentShelf);
+            all.AddRange(shelves);
+            foreach (var sh in all)
             {
                 if (sh.Box.Visibility != Visibility.Visible) continue;
                 var cs = sh.Row.Children.OfType<Border>().Where(c => c.Visibility == Visibility.Visible).ToList();
@@ -708,9 +713,7 @@ namespace TSLauncher
 
         void FocusBanner()
         {
-            SetSelection(null);
-            ScrollTo(MainScroll, false, 0);
-            if (ContinueBanner.Visibility == Visibility.Visible && playBtn != null) playBtn.Focus();
+            ScrollTo(MainScroll, false, 0);   // already on the top row: just make sure the page is at the top
         }
 
         void MoveSelection(string dir)
@@ -719,7 +722,7 @@ namespace TSLauncher
             if (rows.Count == 0) return;
             int r = -1, i = -1;
             if (selCard != null) for (int k = 0; k < rows.Count; k++) { int j = rows[k].IndexOf(selCard); if (j >= 0) { r = k; i = j; break; } }
-            if (r < 0) { if (dir == "Up") FocusBanner(); else SetSelection(rows[0][0]); return; }
+            if (r < 0) { SetSelection(rows[0][0]); return; }
             switch (dir)
             {
                 case "Left": if (i > 0) SetSelection(rows[r][i - 1]); break;

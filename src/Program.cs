@@ -14,8 +14,8 @@ using WinForms = System.Windows.Forms;
 [assembly: AssemblyTitle("TS Launcher")]
 [assembly: AssemblyProduct("TS Launcher")]
 [assembly: AssemblyDescription("Game and language picker for thcrap")]
-[assembly: AssemblyVersion("1.3.0.0")]
-[assembly: AssemblyFileVersion("1.3.0.0")]
+[assembly: AssemblyVersion("1.3.2.0")]
+[assembly: AssemblyFileVersion("1.3.2.0")]
 
 namespace TSLauncher
 {
@@ -25,18 +25,22 @@ namespace TSLauncher
         static EventWaitHandle showSignal;
         static LauncherWindow window;
         static bool safeMode;
+        /// <summary>--selftest (used by the build): opens the window in safe mode, visits every page, closes. Exit code 0 = fine.</summary>
+        public static bool SelfTest;
         static int crashing;
 
         [STAThread]
         public static int Main(string[] args)
         {
             safeMode = args.Any(a => a.Equals("--safe", StringComparison.OrdinalIgnoreCase));
+            SelfTest = args.Any(a => a.Equals("--selftest", StringComparison.OrdinalIgnoreCase));
+            if (SelfTest) safeMode = true;
             string exe = Assembly.GetExecutingAssembly().Location;
             Paths.Init(Path.GetDirectoryName(Path.GetFullPath(exe)));
             // Multicore JIT: records which code runs at startup and pre-compiles it on spare cores next time.
             try { System.Runtime.ProfileOptimization.SetProfileRoot(Paths.Logs); System.Runtime.ProfileOptimization.StartProfile("startup.jitprofile"); } catch { }
 
-            AppDomain.CurrentDomain.UnhandledException += (s, e) => CrashReporter.Report(e.ExceptionObject as Exception, true, safeMode);
+            AppDomain.CurrentDomain.UnhandledException += (s, e) => { if (SelfTest) SelfTestFailed(e.ExceptionObject as Exception); CrashReporter.Report(e.ExceptionObject as Exception, true, safeMode); };
             TaskScheduler.UnobservedTaskException += (s, e) => { Log.Error("background task", e.Exception); e.SetObserved(); };
             WinForms.Application.EnableVisualStyles();
 
@@ -45,7 +49,7 @@ namespace TSLauncher
             bool created;
             instance = new Mutex(true, id, out created);
             showSignal = new EventWaitHandle(false, EventResetMode.AutoReset, id + "-show");
-            if (!created && !args.Contains("--restarted"))
+            if (!created && !args.Contains("--restarted") && !SelfTest)
             {
                 showSignal.Set();
                 return 0;
@@ -53,7 +57,7 @@ namespace TSLauncher
             if (!created) { try { instance.WaitOne(5000); } catch (AbandonedMutexException) { } }
 
             // If the last start never finished, offer safe mode instead of crashing again.
-            if (!safeMode && File.Exists(Paths.StartupMarker))
+            if (!safeMode && !SelfTest && File.Exists(Paths.StartupMarker))
             {
                 var r = WinForms.MessageBox.Show("TS Launcher didn't start properly last time.\n\nStart in safe mode? (Your settings stay untouched; covers, sounds and the controller are off.)",
                     "TS Launcher", WinForms.MessageBoxButtons.YesNo, WinForms.MessageBoxIcon.Warning);
@@ -68,12 +72,14 @@ namespace TSLauncher
                 app.DispatcherUnhandledException += (s, e) =>
                 {
                     e.Handled = true;
+                    if (SelfTest) SelfTestFailed(e.Exception);
                     if (CrashReporter.Report(e.Exception, false, safeMode) == CrashReporter.Choice.Quit) app.Shutdown();
                 };
                 // Background work (library scan, covers) reports back through this before app.Run() starts.
                 SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext(Dispatcher.CurrentDispatcher));
                 window = new LauncherWindow(safeMode);
                 window.Start();
+                if (SelfTest) window.RunSelfTest();
                 new Thread(() =>
                 {
                     while (true)
@@ -86,6 +92,7 @@ namespace TSLauncher
             }
             catch (Exception ex)
             {
+                if (SelfTest) SelfTestFailed(ex);
                 CrashReporter.Report(ex, true, safeMode);
                 return 1;
             }
@@ -94,6 +101,18 @@ namespace TSLauncher
                 try { instance.ReleaseMutex(); } catch { }
             }
             return 0;
+        }
+
+        public static void SelfTestFailed(Exception ex)
+        {
+            try { File.WriteAllText(Path.Combine(Paths.Root, "selftest.txt"), "FAILED\r\n" + ex); } catch { }
+            Environment.Exit(1);
+        }
+
+        public static void SelfTestPassed(string report)
+        {
+            try { File.WriteAllText(Path.Combine(Paths.Root, "selftest.txt"), "OK\r\n" + report); } catch { }
+            Environment.Exit(0);
         }
 
         /// <summary>Called once the window has rendered: the start went fine.</summary>

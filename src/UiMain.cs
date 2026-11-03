@@ -34,12 +34,14 @@ namespace TSLauncher
         DispatcherTimer trackTimer, padTimer, coverTimer;
 
         // XAML elements
-        TextBlock StatusText, SearchHint, DlgSub, DlgTitle, DlgStats, LangHint, LibLabel, BottomHint, NoticeText;
+        TextBlock StatusText, SearchHint, DlgSub, DlgTitle, DlgStats, LangHint, LibLabel, NoticeText, FocusTitle, FocusInfo;
         TextBox SearchBox;
-        Button HomeBtn, StatsBtn, SettingsBtn, HelpBtn, VanillaBtn, CoverBtn, ReplaysBtn, SavesBtn, DlgPlay, DlgFav, DlgClose, SortBtn, NoticeAction, NoticeClose;
-        StackPanel GamePanel, NowPlayingPanel, CoverPanel, StatsPanel, SetupPanel;
+        RadioButton HomeBtn, LangsBtn, StatsBtn, SettingsBtn, HelpBtn;
+        Button VanillaBtn, CoverBtn, ReplaysBtn, SavesBtn, DlgPlay, DlgFav, DlgClose, SortBtn, NoticeAction, NoticeClose;
+        StackPanel GamePanel, NowPlayingPanel, CoverPanel, StatsPanel, SetupPanel, RecentPanel, RecentHost, FilterTabs, HintLeft, HintRight;
+        Image BgA, BgB;
         Grid Overlay, DlgHeaderGrid, SetupOverlay;
-        Border Dialog, DlgHeader, DlgShade, NowPlaying, ContinueBanner, DlgFooter, HeaderBar, BottomBar, NoticeBar, SetupCard;
+        Border Dialog, DlgHeader, DlgShade, NowPlaying, DlgFooter, NoticeBar, BgCache, BgShade;
         Image DlgIcon;
         CheckBox CustomChk, ThpracChk;
         Button ShotsBtn;
@@ -64,18 +66,22 @@ namespace TSLauncher
 
             StatusText = F<TextBlock>("StatusText"); SearchHint = F<TextBlock>("SearchHint"); DlgSub = F<TextBlock>("DlgSub");
             DlgTitle = F<TextBlock>("DlgTitle"); DlgStats = F<TextBlock>("DlgStats"); LangHint = F<TextBlock>("LangHint");
-            LibLabel = F<TextBlock>("LibLabel"); BottomHint = F<TextBlock>("BottomHint"); NoticeText = F<TextBlock>("NoticeText");
+            LibLabel = F<TextBlock>("LibLabel"); NoticeText = F<TextBlock>("NoticeText");
+            FocusTitle = F<TextBlock>("FocusTitle"); FocusInfo = F<TextBlock>("FocusInfo");
             SearchBox = F<TextBox>("SearchBox");
-            HomeBtn = F<Button>("HomeBtn"); StatsBtn = F<Button>("StatsBtn"); SettingsBtn = F<Button>("SettingsBtn"); HelpBtn = F<Button>("HelpBtn");
+            HomeBtn = F<RadioButton>("HomeBtn"); LangsBtn = F<RadioButton>("LangsBtn"); StatsBtn = F<RadioButton>("StatsBtn");
+            SettingsBtn = F<RadioButton>("SettingsBtn"); HelpBtn = F<RadioButton>("HelpBtn");
             VanillaBtn = F<Button>("VanillaBtn"); CoverBtn = F<Button>("CoverBtn"); ReplaysBtn = F<Button>("ReplaysBtn"); SavesBtn = F<Button>("SavesBtn");
             DlgPlay = F<Button>("DlgPlay"); DlgFav = F<Button>("DlgFav"); DlgClose = F<Button>("DlgClose"); SortBtn = F<Button>("SortBtn");
             NoticeAction = F<Button>("NoticeAction"); NoticeClose = F<Button>("NoticeClose");
             GamePanel = F<StackPanel>("GamePanel"); NowPlayingPanel = F<StackPanel>("NowPlayingPanel"); CoverPanel = F<StackPanel>("CoverPanel");
             StatsPanel = F<StackPanel>("StatsPanel"); SetupPanel = F<StackPanel>("SetupPanel");
+            RecentPanel = F<StackPanel>("RecentPanel"); RecentHost = F<StackPanel>("RecentHost"); FilterTabs = F<StackPanel>("FilterTabs");
+            HintLeft = F<StackPanel>("HintLeft"); HintRight = F<StackPanel>("HintRight");
+            BgA = F<Image>("BgA"); BgB = F<Image>("BgB"); BgCache = F<Border>("BgCache"); BgShade = F<Border>("BgShade");
             Overlay = F<Grid>("Overlay"); DlgHeaderGrid = F<Grid>("DlgHeaderGrid"); SetupOverlay = F<Grid>("SetupOverlay");
             Dialog = F<Border>("Dialog"); DlgHeader = F<Border>("DlgHeader"); DlgShade = F<Border>("DlgShade"); NowPlaying = F<Border>("NowPlaying");
-            ContinueBanner = F<Border>("ContinueBanner"); DlgFooter = F<Border>("DlgFooter"); HeaderBar = F<Border>("HeaderBar"); BottomBar = F<Border>("BottomBar");
-            NoticeBar = F<Border>("NoticeBar"); SetupCard = F<Border>("SetupCard");
+            DlgFooter = F<Border>("DlgFooter"); NoticeBar = F<Border>("NoticeBar");
             DlgIcon = F<Image>("DlgIcon"); CustomChk = F<CheckBox>("CustomChk"); ThpracChk = F<CheckBox>("ThpracChk"); ShotsBtn = F<Button>("ShotsBtn"); LangPanel = F<UniformGrid>("LangPanel");
             MainScroll = F<ScrollViewer>("MainScroll"); StatsScroll = F<ScrollViewer>("StatsScroll"); LangScroll = F<ScrollViewer>("LangScroll"); CoverScroll = F<ScrollViewer>("CoverScroll");
             SearchLine = F<Rectangle>("SearchLine");
@@ -143,6 +149,7 @@ namespace TSLauncher
             Reload(() =>
             {
                 FollowGameTheme(continueGame);
+                FollowBackground(continueGame, true);
                 if (!SafeMode && !S.SetupDone) ShowSetup();
                 else if (!SafeMode) StartCoverDownload(false, true);
                 if (!SafeMode && S.CheckUpdates) CheckForUpdate(false);
@@ -246,7 +253,7 @@ namespace TSLauncher
                 RebuildCards();
                 if (Lib.Thcrap == null) StatusText.Text = "thcrap not found - set its folder in Settings";
                 else StatusText.Text = Fmt.Plural(Lib.Games.Count, "game", "games") + "  ·  " + Fmt.Plural(Lib.ConfigCount, "language", "languages");
-                if (View == "settings") BuildSettingsPage();
+                RefreshPage();
                 if (after != null) after();
             }, TaskScheduler.FromCurrentSynchronizationContext());
         }
@@ -259,7 +266,7 @@ namespace TSLauncher
             Lib = Library.Apply(Lib.Raw ?? Lib, hidden, onlyFor);
             RebuildCards();
             if (Lib.Thcrap != null) StatusText.Text = Fmt.Plural(Lib.Games.Count, "game", "games") + "  ·  " + Fmt.Plural(Lib.ConfigCount, "language", "languages");
-            if (View == "settings") BuildSettingsPage();
+            RefreshPage();
             if (after != null) after();
         }
 
@@ -385,8 +392,6 @@ namespace TSLauncher
             W.Resources["AccentLight"] = new SolidColorBrush(light);
             AnimateColor(bgTop, Mix(Col("#14131F"), c, 0.25));
             AnimateColor(bgMid, Mix(Col("#16162B"), c, 0.06));
-            HeaderBar.BorderBrush = FadeLine(c, 112);
-            BottomBar.BorderBrush = FadeLine(c, 80);
             DlgFooter.BorderBrush = FadeLine(c, 96);
             var sl = new LinearGradientBrush { StartPoint = new Point(0, 0), EndPoint = new Point(1, 0) };
             sl.GradientStops.Add(new GradientStop(Color.FromArgb(0, light.R, light.G, light.B), 0));
@@ -395,7 +400,6 @@ namespace TSLauncher
             sl.GradientStops.Add(new GradientStop(Color.FromArgb(0, light.R, light.G, light.B), 1));
             SearchLine.Fill = sl;
             SearchBox.CaretBrush = new SolidColorBrush(light);
-            BottomHint.Foreground = new SolidColorBrush(light);
             UpdateViewButtons();
             UpdateFilterChips();
         }
@@ -436,12 +440,104 @@ namespace TSLauncher
             themeDelay.Stop(); themeDelay.Start();
         }
 
+        // ---------------------------------------------------------------- self test (build check)
+        /// <summary>Builds every page and every kind of card once, so a layout mistake fails the build instead of a user's start.</summary>
+        public void RunSelfTest()
+        {
+            var t = new DispatcherTimer { Interval = TimeSpan.FromSeconds(4) };
+            t.Tick += (s, e) =>
+            {
+                t.Stop();
+                try
+                {
+                    var report = new List<string>();
+                    S.ShowUnowned = true; RebuildCards();
+                    report.Add("cards: " + cards.Count);
+                    foreach (var v in Views) { ShowView(v, true); W.UpdateLayout(); report.Add("page " + v + ": " + StatsPanel.Children.Count + " items"); }
+                    ShowView("library", true);
+                    var g = Lib.Games.Concat(Lib.Unowned).FirstOrDefault();
+                    if (g != null)
+                    {
+                        var host = new StackPanel { Orientation = Orientation.Horizontal };
+                        host.Children.Add(NewCard(g, true, true)); host.Children.Add(NewCard(g, true)); host.Children.Add(NewCard(g));
+                        RecentHost.Children.Add(host); RecentPanel.Visibility = Visibility.Visible;
+                        foreach (Border c in host.Children) { SetGlow(c, true); SetGlow(c, false); }
+                        ShowFocusCaption(g);
+                        W.UpdateLayout();
+                        report.Add("recent row tiles: ok");
+                    }
+                    if (cards.Count > 0) { MoveSelection("Right"); MoveSelection("Down"); report.Add("keyboard selection: ok"); }
+                    S.Background = "none"; FollowBackground(null, true);
+                    UpdateHints(); W.UpdateLayout();
+                    Program.SelfTestPassed(string.Join("\r\n", report));
+                }
+                catch (Exception ex) { Program.SelfTestFailed(ex); }
+            };
+            t.Start();
+        }
+
+        // ---------------------------------------------------------------- background picture
+        DispatcherTimer bgDelay;
+        Game bgPending;
+        string bgShownId;
+        bool bgOnA;
+
+        /// <summary>Crossfades the blurred art of a game behind the library (Settings > Appearance > Background picture).</summary>
+        void FollowBackground(Game g, bool immediate)
+        {
+            var mode = S.Background ?? "focus";
+            if (SafeMode || mode == "none") { SetBackground(null); return; }
+            if (mode.StartsWith("game:"))
+            {
+                var id = mode.Substring(5);
+                g = Lib.Games.Concat(Lib.Unowned).FirstOrDefault(x => x.Id == id);
+                immediate = true;
+            }
+            if (g == null) return;
+            if (immediate) { if (bgDelay != null) bgDelay.Stop(); SetBackground(g); return; }
+            bgPending = g;
+            if (bgDelay == null)
+            {
+                bgDelay = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(250) };
+                bgDelay.Tick += (s, e) => { bgDelay.Stop(); if (bgPending != null) SetBackground(bgPending); };
+            }
+            bgDelay.Stop(); bgDelay.Start();
+        }
+
+        void SetBackground(Game g)
+        {
+            string path = null;
+            if (g != null && !SafeMode) path = Covers.Find(g.Id + "_hero") ?? Covers.Find(g.Id);
+            var id = path == null ? null : g.Id;
+            if (id == bgShownId) return;
+            bgShownId = id;
+            var fade = new Duration(TimeSpan.FromMilliseconds(400));
+            if (path == null)
+            {
+                BgA.BeginAnimation(UIElement.OpacityProperty, new DoubleAnimation(0, fade));
+                BgB.BeginAnimation(UIElement.OpacityProperty, new DoubleAnimation(0, fade));
+                BgShade.Visibility = Visibility.Collapsed;
+                return;
+            }
+            ImageCache.Load(W.Dispatcher, path, 640, false, bmp =>
+            {
+                if (bgShownId != id) return;   // moved on while it was loading
+                var front = bgOnA ? BgB : BgA;
+                var back = bgOnA ? BgA : BgB;
+                bgOnA = !bgOnA;
+                front.Source = bmp;
+                BgShade.Visibility = Visibility.Visible;
+                front.BeginAnimation(UIElement.OpacityProperty, new DoubleAnimation(0.55, fade));
+                back.BeginAnimation(UIElement.OpacityProperty, new DoubleAnimation(0, fade));
+            });
+        }
+
         void SetTheme(string name)
         {
             S.Theme = name; S.Save();
             InitTheme();
             RebuildCards();
-            if (View == "settings") BuildSettingsPage();
+            RefreshPage();
         }
 
         // ---------------------------------------------------------------- views
@@ -453,21 +549,63 @@ namespace TSLauncher
             else
             {
                 SetSelection(null);
-                if (v == "stats") BuildStatsPage(); else if (v == "settings") BuildSettingsPage(); else BuildHelpPage();
+                if (v == "stats") BuildStatsPage(); else if (v == "settings") BuildSettingsPage(); else if (v == "languages") BuildLanguagesPage(); else BuildHelpPage();
                 MainScroll.Visibility = Visibility.Collapsed;
                 StatsScroll.Visibility = Visibility.Visible;
                 StatsScroll.ScrollToTop();
             }
             UpdateViewButtons();
+            UpdateHints();
         }
 
         void UpdateViewButtons()
         {
-            if (string.IsNullOrEmpty(accentHex) || HomeBtn == null) return;
-            HomeBtn.Background = Br(View == "library" ? accentHex : "#272A44");
-            StatsBtn.Background = Br(View == "stats" ? accentHex : "#272A44");
-            SettingsBtn.Background = Br(View == "settings" ? accentHex : "#272A44");
-            HelpBtn.Background = Br(View == "help" ? accentHex : "#272A44");
+            if (HomeBtn == null) return;
+            HomeBtn.IsChecked = View == "library";
+            LangsBtn.IsChecked = View == "languages";
+            StatsBtn.IsChecked = View == "stats";
+            SettingsBtn.IsChecked = View == "settings";
+            HelpBtn.IsChecked = View == "help";
+        }
+
+        // ---------------------------------------------------------------- controller hints (bottom right, Big Picture style)
+        static FrameworkElement Hint(string glyph, string label, bool pill = false)
+        {
+            var sp = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(18, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
+            var g = new Border
+            {
+                MinWidth = 22, Height = 22, CornerRadius = new CornerRadius(pill ? 4 : 11), Background = Br("#E6E5F0"), Padding = new Thickness(pill ? 5 : 0, 0, pill ? 5 : 0, 0),
+                Child = new TextBlock { Text = glyph, FontSize = pill ? 10 : 12, FontWeight = FontWeights.Bold, Foreground = Br("#14151F"), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center },
+            };
+            sp.Children.Add(g);
+            if (label.Length > 0) sp.Children.Add(new TextBlock { Text = label, FontSize = 12, FontWeight = FontWeights.SemiBold, Foreground = Br("#C9CBDA"), Margin = new Thickness(8, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center });
+            return sp;
+        }
+
+        void UpdateHints()
+        {
+            if (HintRight == null) return;
+            HintLeft.Children.Clear(); HintRight.Children.Clear();
+            var lb = Hint("LB", "", true); lb.Margin = new Thickness(0);
+            var rb = Hint("RB", "Switch page", true); rb.Margin = new Thickness(6, 0, 0, 0);
+            HintLeft.Children.Add(lb);
+            HintLeft.Children.Add(rb);
+            if (Overlay != null && Overlay.Visibility == Visibility.Visible)
+            {
+                HintRight.Children.Add(Hint("A", "Play"));
+                HintRight.Children.Add(Hint("X", "Play last language"));
+                HintRight.Children.Add(Hint("Y", "Favorite"));
+                HintRight.Children.Add(Hint("B", "Close"));
+            }
+            else if (View == "library")
+            {
+                HintRight.Children.Add(Hint("A", "Open"));
+                HintRight.Children.Add(Hint("X", "Play"));
+                HintRight.Children.Add(Hint("Y", "Favorite"));
+                HintRight.Children.Add(Hint("B", "Back"));
+            }
+            else HintRight.Children.Add(Hint("B", "Back to library"));
+            HintLeft.ToolTip = HintRight.ToolTip = "Keyboard: Enter = A, Esc = B, F = Y. Ctrl+F searches.";
         }
 
         // ---------------------------------------------------------------- smooth scrolling
@@ -526,18 +664,12 @@ namespace TSLauncher
                 if (empty != searchWasEmpty) { searchWasEmpty = empty; UpdateContinue(); }
             };
             SearchBox.GotKeyboardFocus += (s, e) => SearchLine.Opacity = 1;
-            SearchBox.LostKeyboardFocus += (s, e) => SearchLine.Opacity = 0.45;
+            SearchBox.LostKeyboardFocus += (s, e) => SearchLine.Opacity = 0.35;
+            BgCache.CacheMode = new BitmapCache();   // blur once, then reuse the result
             SortBtn.Click += (s, e) => ShowSortMenu();
             BuildFilterChips();
-            foreach (var b in new[] { HomeBtn, StatsBtn, SettingsBtn, HelpBtn })
-            {
-                var btn = b;
-                btn.MouseEnter += (s, e) => BottomHint.Text = Convert.ToString(btn.Tag);
-                btn.MouseLeave += (s, e) => BottomHint.Text = "";
-                btn.GotKeyboardFocus += (s, e) => BottomHint.Text = Convert.ToString(btn.Tag);
-                btn.LostKeyboardFocus += (s, e) => BottomHint.Text = "";
-            }
             HomeBtn.Click += (s, e) => ShowView("library");
+            LangsBtn.Click += (s, e) => ShowView("languages");
             StatsBtn.Click += (s, e) => ShowView("stats");
             SettingsBtn.Click += (s, e) => ShowView("settings");
             HelpBtn.Click += (s, e) => ShowView("help");
@@ -599,7 +731,7 @@ namespace TSLauncher
             if ((mods & ModifierKeys.Control) != 0)
             {
                 SetCardScale(S.CardScale + (e.Delta > 0 ? 0.1 : -0.1)); S.Save(); SharpenCoversLater();
-                if (View == "settings") BuildSettingsPage();
+                RefreshPage();
                 e.Handled = true; return;
             }
             if (Overlay.Visibility == Visibility.Visible || SetupOverlay.Visibility == Visibility.Visible) return;
@@ -618,7 +750,7 @@ namespace TSLauncher
         }
 
         // ---------------------------------------------------------------- keyboard + controller navigation
-        static readonly string[] Views = { "library", "stats", "settings", "help" };
+        static readonly string[] Views = { "library", "languages", "stats", "settings", "help" };
 
         /// <summary>Shared by keyboard and controller. Returns true when the key was used.</summary>
         bool Nav(string k, bool ctrl)
@@ -629,8 +761,8 @@ namespace TSLauncher
             {
                 if (Overlay.Visibility == Visibility.Visible) return true;
                 int i = Array.IndexOf(Views, View);
-                if (k == "PadLB") ShowView(Views[(i + 3) % 4]);
-                else if (k == "PadRB") ShowView(Views[(i + 1) % 4]);
+                if (k == "PadLB") ShowView(Views[(i + Views.Length - 1) % Views.Length]);
+                else if (k == "PadRB") ShowView(Views[(i + 1) % Views.Length]);
                 else if (k == "PadStart") ShowView(View == "settings" ? "library" : "settings");
                 else ShowView(View == "help" ? "library" : "help");
                 return true;
@@ -660,18 +792,6 @@ namespace TSLauncher
                 return false;
             }
 
-            var fe = Keyboard.FocusedElement;
-            if (fe != null && (fe == playBtn || fe == otherBtn))
-            {
-                switch (k)
-                {
-                    case "Left": playBtn.Focus(); return true;
-                    case "Right": otherBtn.Focus(); return true;
-                    case "Up": return true;
-                    case "Down": GamePanel.Focus(); MoveSelection("Down"); return true;
-                    case "Return": ((Button)fe).RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent)); return true;
-                }
-            }
             switch (k)
             {
                 case "Left": case "Right": case "Up": case "Down": GamePanel.Focus(); MoveSelection(k); return true;

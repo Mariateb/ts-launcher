@@ -395,7 +395,7 @@ namespace TSLauncher
             { "ar", "العربية" }, { "he", "עברית" }, { "el", "Ελληνικά" }, { "ro", "Română" },
         };
 
-        /// <summary>Names chosen in Settings > Languages (code -> display name).</summary>
+        /// <summary>Names chosen in the Languages tab (code -> display name).</summary>
         public static Dictionary<string, string> Custom = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
         public static string Label(string code)

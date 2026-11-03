@@ -32,7 +32,7 @@ namespace TSLauncher
         public string Root, Loader, ConfigDir;
     }
 
-    /// <summary>One language as listed in Settings > Languages.</summary>
+    /// <summary>One language as listed in the Languages tab.</summary>
     public sealed class LangInfo
     {
         public string Code, Config;   // Config is null for shortcut-only languages

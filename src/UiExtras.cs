@@ -217,7 +217,7 @@ namespace TSLauncher
                 S.Save();
                 StatusText.Text = answer == MessageBoxResult.Yes ? "Backups copied (" + t.Result + " files). New backups now go to " + target + "." : "New backups now go to " + target + ".";
                 Log.App("Backup folder changed to " + target);
-                if (View == "settings") BuildSettingsPage();
+                RefreshPage();
             }, TaskScheduler.FromCurrentSynchronizationContext());
         }
 
@@ -264,7 +264,7 @@ namespace TSLauncher
                     }
                     MessageBox.Show(W, "Restored " + Fmt.Plural(restored, "game", "games") + "." + (skipped.Count > 0 ? "\n\nSkipped: " + string.Join(", ", skipped) : ""), AppInfo.Name);
                 }
-                if (View == "settings") BuildSettingsPage();
+                RefreshPage();
             }, TaskScheduler.FromCurrentSynchronizationContext());
         }
 
