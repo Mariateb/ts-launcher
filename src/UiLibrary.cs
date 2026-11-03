@@ -431,16 +431,20 @@ namespace TSLauncher
             var arrows = new List<Border>();
             foreach (int dir in new[] { -1, 1 })
             {
-                var gb = new LinearGradientBrush { StartPoint = new Point(dir < 0 ? 0 : 1, 0), EndPoint = new Point(dir < 0 ? 1 : 0, 0) };
-                gb.GradientStops.Add(new GradientStop(Color.FromArgb(235, 15, 17, 34), 0));
-                gb.GradientStops.Add(new GradientStop(Color.FromArgb(0, 15, 17, 34), 1));
-                var chev = TB(dir < 0 ? "" : "", 24, "#F0EEF8");
+                // a small round button over the row's end (a full-height fade panel showed as a dark box around the cards)
+                var chev = TB(dir < 0 ? "" : "", 16, "#F0EEF8");
                 chev.FontFamily = new FontFamily("Segoe MDL2 Assets");
-                chev.VerticalAlignment = VerticalAlignment.Center; chev.HorizontalAlignment = dir < 0 ? HorizontalAlignment.Left : HorizontalAlignment.Right; chev.Margin = Th(18, 0, 18, 0);
-                var a = new Border { Width = 84, HorizontalAlignment = dir < 0 ? HorizontalAlignment.Left : HorizontalAlignment.Right, Cursor = Cursors.Hand, Background = gb, Child = chev, Visibility = Visibility.Collapsed };
+                chev.VerticalAlignment = VerticalAlignment.Center; chev.HorizontalAlignment = HorizontalAlignment.Center;
+                var a = new Border
+                {
+                    Width = 44, Height = 44, CornerRadius = new CornerRadius(22), Margin = Th(12, 0, 12, 0), VerticalAlignment = VerticalAlignment.Center,
+                    HorizontalAlignment = dir < 0 ? HorizontalAlignment.Left : HorizontalAlignment.Right, Cursor = Cursors.Hand,
+                    Background = Br("#E6141626"), BorderBrush = Br("#40FFFFFF"), BorderThickness = Th(1, 1, 1, 1), Child = chev, Visibility = Visibility.Collapsed,
+                    Effect = new DropShadowEffect { BlurRadius = 10, ShadowDepth = 2, Opacity = 0.5 },
+                };
                 int d = dir; var sv = sh.Scroll;
-                a.MouseEnter += (s, e) => chev.Foreground = Br("#FFFFFF");
-                a.MouseLeave += (s, e) => chev.Foreground = Br("#F0EEF8");
+                a.MouseEnter += (s, e) => { a.Background = Br("#ECEBF5"); chev.Foreground = Br("#14151F"); };
+                a.MouseLeave += (s, e) => { a.Background = Br("#E6141626"); chev.Foreground = Br("#F0EEF8"); };
                 a.MouseLeftButtonUp += (s, e) => { ScrollBy(sv, true, d * sv.ViewportWidth * 0.8); e.Handled = true; };
                 frame.Children.Add(a);
                 arrows.Add(a);
@@ -723,7 +727,8 @@ namespace TSLauncher
         bool RealMouseMove(MouseEventArgs e)
         {
             var p = e.GetPosition(W);
-            bool moved = Math.Abs(p.X - lastMouse.X) + Math.Abs(p.Y - lastMouse.Y) > 0.5 || double.IsNaN(lastMouse.X);
+            // the first event only records where the pointer is (it may just be resting over the window)
+            bool moved = !double.IsNaN(lastMouse.X) && Math.Abs(p.X - lastMouse.X) + Math.Abs(p.Y - lastMouse.Y) > 0.5;
             lastMouse = p;
             return moved;
         }
