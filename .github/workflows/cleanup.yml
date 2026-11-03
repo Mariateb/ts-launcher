@@ -1,0 +1,19 @@
+name: Remove 1.3.2.1
+
+# One-off: deletes the v1.3.2.1 release and tag (superseded by 1.3.3), then this file is removed.
+on:
+  push:
+    branches: [ main ]
+    paths: [ '.github/workflows/cleanup.yml' ]
+
+permissions:
+  contents: write
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Delete release and tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release delete v1.3.2.1 --repo "${{ github.repository }}" --cleanup-tag --yes
