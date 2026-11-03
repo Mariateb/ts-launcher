@@ -465,10 +465,11 @@ namespace TSLauncher
                 foreach (var v in Views) { ShowView(v, true); W.UpdateLayout(); report.Add("page " + v + ": " + StatsPanel.Children.Count + " items"); }
                 ShowView("library", true);
                 selfTestRecent = Lib.Games.Concat(Lib.Unowned).Take(5).ToList();
-                UpdateContinue();
+                UpdateContinue(); report.Add("recent row built");
                 continueGame = selfTestRecent.FirstOrDefault();
                 var first = CardRows().Select(r => r.FirstOrDefault()).FirstOrDefault(c => c != null);
                 if (first != null) SetSelection(first);
+                report.Add("first card selected");
             });
             steps.Add(() => { Shot(shots, "1-recent-row"); MoveSelection("Right"); });
             steps.Add(() => { Shot(shots, "2-recent-second"); MoveSelection("Down"); });
@@ -486,11 +487,12 @@ namespace TSLauncher
             int at = 0;
             // watchdog on its own thread: reports where it got stuck even if a window blocks the UI
             watchdog = new System.Threading.Timer(_ => Program.SelfTestFailed(new TimeoutException("stuck at step " + at + " of " + steps.Count + "; " + string.Join(" | ", report))), null, 90000, System.Threading.Timeout.Infinite);
-            var t = new DispatcherTimer { Interval = TimeSpan.FromSeconds(4) };   // first step once the library has loaded
+            // Normal priority: on a machine without a GPU, constant rendering would otherwise starve the timer
+            var t = new DispatcherTimer(DispatcherPriority.Normal) { Interval = TimeSpan.FromSeconds(4) };   // first step once the library has loaded
             t.Tick += (s, e) =>
             {
                 t.Interval = TimeSpan.FromMilliseconds(1200);   // then leave time for animations and covers
-                try { steps[at++](); W.UpdateLayout(); }
+                try { report.Add("step " + (at + 1)); steps[at++](); W.UpdateLayout(); }
                 catch (Exception ex) { t.Stop(); Program.SelfTestFailed(ex); }
                 if (at >= steps.Count) t.Stop();
             };
