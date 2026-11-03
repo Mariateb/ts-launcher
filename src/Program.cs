@@ -14,8 +14,8 @@ using WinForms = System.Windows.Forms;
 [assembly: AssemblyTitle("TS Launcher")]
 [assembly: AssemblyProduct("TS Launcher")]
 [assembly: AssemblyDescription("Game and language picker for thcrap")]
-[assembly: AssemblyVersion("1.3.2.1")]
-[assembly: AssemblyFileVersion("1.3.2.1")]
+[assembly: AssemblyVersion("1.3.3.0")]
+[assembly: AssemblyFileVersion("1.3.3.0")]
 
 namespace TSLauncher
 {
@@ -182,11 +182,11 @@ namespace TSLauncher
             FormBorderStyle = WinForms.FormBorderStyle.FixedDialog;
             MaximizeBox = false; MinimizeBox = false; TopMost = true;
             BackColor = Color.FromArgb(25, 26, 46); ForeColor = Color.FromArgb(240, 238, 248);
-            Font = new Font("Segoe UI", 10f);
+            Font = new Font("Tahoma", 10f);
             ClientSize = new System.Drawing.Size(560, 330);
             try { Icon = Icon.ExtractAssociatedIcon(Assembly.GetExecutingAssembly().Location); } catch { }
 
-            var title = new WinForms.Label { Text = fatal ? "TS Launcher ran into a problem and has to close" : "Something went wrong", Font = new Font("Segoe UI Semibold", 14f), AutoSize = false, Bounds = new Rectangle(24, 18, 512, 32) };
+            var title = new WinForms.Label { Text = fatal ? "TS Launcher ran into a problem and has to close" : "Something went wrong", Font = new Font("Tahoma", 14f, System.Drawing.FontStyle.Bold), AutoSize = false, Bounds = new Rectangle(24, 18, 512, 32) };
             var body = new WinForms.Label
             {
                 Text = (fatal ? "Your play time and settings are safe. " : "You can usually just keep going. ") + "A report was saved in the logs folder" +

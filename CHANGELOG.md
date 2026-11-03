@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.3.3 — 2026-11-03
+
+The fixes from 1.3.2.1, released again as 1.3.3 so that TS Launcher 1.3.2 offers them as an update. 1.3.2 doesn't recognise four-part version numbers like 1.3.2.1.
+
+- Button hints (A Open, X Play...) only appear when a controller is connected, and the letters are centred in their buttons.
+- The last played game uses its cover, a little wider than the other cards, instead of its banner.
+- The glow around the card you're on is no longer cut off at the edges of the row.
+- The card you're on now pushes its neighbours aside instead of slipping behind them.
+- The whole launcher uses the Tahoma font, including the error window.
+- Update notes are plain text, so the update window no longer shows Markdown symbols, whichever version you update from.
+
 ## 1.3.2.1 — 2026-11-03
 
 Fixes for the new look.
@@ -10,7 +21,7 @@ Fixes for the new look.
 - The card you're on now pushes its neighbours aside instead of slipping behind them.
 - The whole launcher uses the Tahoma font.
 - Update notes appear as plain text in the update window, without Markdown symbols.
-- Updates now understand four-part versions like this one. If you have 1.3.2, download this release by hand once; later updates are offered automatically again.
+- Updates now understand four-part versions like this one. TS Launcher 1.3.2 doesn't, so 1.3.3 repeats these fixes for it.
 
 ## 1.3.2 — 2026-11-03
 
