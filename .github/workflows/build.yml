@@ -49,11 +49,41 @@ jobs:
         run: |
           # Opens the real window (safe mode), builds every page and card type, then closes.
           # A layout or start-up error fails the build here instead of on someone's PC.
+          # placeholder covers (bright, busy pictures, like real covers) so the screenshots show the card look
+          Add-Type -AssemblyName System.Drawing
+          New-Item -ItemType Directory -Force out/covers | Out-Null
+          $ids = 'th06','th07','th08','th10','th11','th12','th13','th14','th15','th16','th17','th18','th19','th20'
+          $rnd = New-Object System.Random 7
+          foreach ($id in $ids) {
+            $bmp = New-Object System.Drawing.Bitmap 600, 900
+            $gfx = [System.Drawing.Graphics]::FromImage($bmp)
+            $gfx.SmoothingMode = 'AntiAlias'
+            $c1 = [System.Drawing.Color]::FromArgb(255, $rnd.Next(120,256), $rnd.Next(60,230), $rnd.Next(60,256))
+            $c2 = [System.Drawing.Color]::FromArgb(255, $rnd.Next(0,120), $rnd.Next(0,120), $rnd.Next(40,160))
+            $br = New-Object System.Drawing.Drawing2D.LinearGradientBrush (New-Object System.Drawing.Rectangle 0,0,600,900), $c1, $c2, 70
+            $gfx.FillRectangle($br, 0, 0, 600, 900)
+            for ($k = 0; $k -lt 9; $k++) {
+              $b = New-Object System.Drawing.SolidBrush ([System.Drawing.Color]::FromArgb(150, $rnd.Next(256), $rnd.Next(256), $rnd.Next(256)))
+              $r = $rnd.Next(60, 260); $gfx.FillEllipse($b, $rnd.Next(-100, 560), $rnd.Next(-100, 860), $r, $r)
+            }
+            $font = New-Object System.Drawing.Font 'Tahoma', 64, ([System.Drawing.FontStyle]::Bold)
+            $gfx.DrawString($id.ToUpper(), $font, [System.Drawing.Brushes]::White, 40, 720)
+            $gfx.Dispose(); $bmp.Save("out/covers/$id.png", [System.Drawing.Imaging.ImageFormat]::Png); $bmp.Dispose()
+          }
           $p = Start-Process out/TSLauncher.exe -ArgumentList '--selftest' -PassThru
           if (-not $p.WaitForExit(120000)) { $p.Kill(); Write-Host "::error::Start-up check timed out"; exit 1 }
           if (Test-Path out/selftest.txt) { Get-Content out/selftest.txt } else { Write-Host "no selftest.txt" }
           if ($p.ExitCode -ne 0) { Write-Host "::error::Start-up check failed (exit $($p.ExitCode))"; exit 1 }
-          Remove-Item out/selftest.txt, out/logs, out/backups -Recurse -Force -ErrorAction SilentlyContinue
+          Move-Item out/shots shots -ErrorAction SilentlyContinue
+          Remove-Item out/selftest.txt, out/logs, out/backups, out/covers -Recurse -Force -ErrorAction SilentlyContinue
+
+      - name: Upload screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: screenshots
+          path: shots/
+          if-no-files-found: ignore
 
       - name: Package
         shell: pwsh

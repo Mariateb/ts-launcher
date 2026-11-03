@@ -154,7 +154,7 @@ namespace TSLauncher
 
         readonly Dictionary<string, Border> cards = new Dictionary<string, Border>();
         /// <summary>Per card: the caption shown on focus, and whether the card belongs to the recent row.</summary>
-        sealed class CardParts { public Border Strip; public bool KeepStrip, Recent; }
+        sealed class CardParts { public Border Strip, Ring; public bool KeepStrip, Recent; }
         readonly Dictionary<Border, CardParts> cardParts = new Dictionary<Border, CardParts>();
         Shelf recentShelf;
         readonly List<Shelf> shelves = new List<Shelf>();
@@ -215,7 +215,7 @@ namespace TSLauncher
         {
             var color = Col(Catalog.ColorHex(g.Id));
             bool unowned = g.Unowned;
-            var coverPath = SafeMode ? null : Covers.Find(g.Id);
+            var coverPath = NoArt ? null : Covers.Find(g.Id);
             bool hasArt = coverPath != null;
             bool playing = SessionOf(g) != null;
             bool fav = S.Favorites.Contains(g.Id);
@@ -307,11 +307,20 @@ namespace TSLauncher
                 strip.Visibility = parts.KeepStrip ? Visibility.Visible : Visibility.Collapsed;
                 grid.Children.Add(strip);
             }
+            // focus ring (Steam style): a white outline just outside the card, with the card's own edge
+            // turning dark in between, so the outline reads clearly against any cover
+            parts.Ring = new Border
+            {
+                Margin = Th(-7, -7, -7, -7), BorderThickness = Th(3, 3, 3, 3), CornerRadius = new CornerRadius(8),
+                BorderBrush = Br("#FFFFFFFF"), IsHitTestVisible = false, Visibility = Visibility.Collapsed,
+            };
+            grid.Children.Add(parts.Ring);
             cardParts[card] = parts;
             card.Child = grid;
 
-            card.MouseEnter += (s, e) => SetGlow(card, true);
-            card.MouseLeave += (s, e) => { if (card != selCard) SetGlow(card, false); };
+            // the mouse takes over the selection (one focused card at a time, and the arrows continue from it),
+            // but only when it really moves: a row scrolling under a still pointer doesn't steal the focus
+            card.MouseMove += (s, e) => { if (card != selCard && RealMouseMove(e)) HoverSelect(card); };
             card.MouseLeftButtonUp += (s, e) => Safe("open game", () => OpenCard(g));
             card.MouseRightButtonUp += (s, e) => Safe("play", () => { if (g.Unowned) OpenStore(g); else PlayLast(g); });
             return card;
@@ -341,15 +350,17 @@ namespace TSLauncher
             Panel.SetZIndex(el, to > 1 ? 1 : 0);
         }
 
-        static readonly DropShadowEffect FocusGlow = MakeFocusGlow();
-        static DropShadowEffect MakeFocusGlow()
+        /// <summary>A soft dark shadow under the focused card. It falls mostly downwards, away from the row title,
+        /// and stays inside the room the row leaves around its cards, so nothing gets cut off.</summary>
+        static readonly DropShadowEffect FocusShadow = MakeFocusShadow();
+        static DropShadowEffect MakeFocusShadow()
         {
-            var e = new DropShadowEffect { Color = Colors.White, BlurRadius = 24, ShadowDepth = 0, Opacity = 0.35 };
+            var e = new DropShadowEffect { Color = Colors.Black, Direction = 270, ShadowDepth = 9, BlurRadius = 20, Opacity = 0.6, RenderingBias = RenderingBias.Performance };
             e.Freeze();
             return e;
         }
 
-        /// <summary>Big Picture focus: a slight zoom, a white outline and a soft white glow.</summary>
+        /// <summary>Big Picture focus: a slight zoom, a white ring with a dark gap, a shadow underneath.</summary>
         void SetGlow(Border card, bool on)
         {
             var g = (Game)card.Tag;
@@ -360,8 +371,9 @@ namespace TSLauncher
                 FollowGameTheme(g, false);
                 FollowBackground(g, false);
                 Sounds.Play("move");
-                card.Effect = FocusGlow;
-                card.BorderBrush = Br("#FFFFFFFF");
+                card.Effect = FocusShadow;
+                card.BorderBrush = Br("#FF0B0C16");
+                if (parts != null && parts.Ring != null) parts.Ring.Visibility = Visibility.Visible;
                 Scale(card, 1.05);
                 if (parts != null && parts.Strip != null) parts.Strip.Visibility = Visibility.Visible;
                 if (parts != null && parts.Recent) ShowFocusCaption(g);
@@ -370,6 +382,7 @@ namespace TSLauncher
             {
                 card.Effect = null;
                 card.BorderBrush = Br(card.Uid);
+                if (parts != null && parts.Ring != null) parts.Ring.Visibility = Visibility.Collapsed;
                 Scale(card, 1.0);
                 if (parts != null && parts.Strip != null && !parts.KeepStrip) parts.Strip.Visibility = Visibility.Collapsed;
             }
@@ -660,7 +673,7 @@ namespace TSLauncher
         /// </summary>
         void UpdateContinue()
         {
-            var played = Lib.Games
+            var played = selfTestRecent ?? Lib.Games
                 .Select(g => { var st = Stats.Get(g.Id); return new { g, d = st == null ? null : st.LastPlayedDate }; })
                 .Where(x => x.d != null).OrderByDescending(x => x.d.Value).Select(x => x.g).ToList();
             continueGame = played.FirstOrDefault();
@@ -703,6 +716,24 @@ namespace TSLauncher
                 if (cs.Count > 0) rows.Add(cs);
             }
             return rows;
+        }
+
+        Point lastMouse = new Point(double.NaN, double.NaN);
+
+        bool RealMouseMove(MouseEventArgs e)
+        {
+            var p = e.GetPosition(W);
+            bool moved = Math.Abs(p.X - lastMouse.X) + Math.Abs(p.Y - lastMouse.Y) > 0.5 || double.IsNaN(lastMouse.X);
+            lastMouse = p;
+            return moved;
+        }
+
+        /// <summary>Selects the card under the mouse without scrolling to it (it's already where you're pointing).</summary>
+        void HoverSelect(Border card)
+        {
+            if (selCard != null) SetGlow(selCard, false);
+            selCard = card;
+            SetGlow(card, true);
         }
 
         void SetSelection(Border card)

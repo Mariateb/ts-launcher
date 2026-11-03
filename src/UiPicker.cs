@@ -33,7 +33,7 @@ namespace TSLauncher
 
         void SetPickerHeader(Game g)
         {
-            var heroPath = SafeMode ? null : Covers.Find(g.Id + "_hero");
+            var heroPath = NoArt ? null : Covers.Find(g.Id + "_hero");
             var c = Col(Catalog.ColorHex(g.Id));
             DlgHeader.Background = new LinearGradientBrush(c, Mix(c, Colors.Black, 0.65), 0);
             DlgShade.Visibility = Visibility.Collapsed;
@@ -299,7 +299,7 @@ namespace TSLauncher
                 var row = new DockPanel { Margin = Th(0, 3, 0, 3) };
                 var img = new Image { Height = 54, MaxWidth = 54, Margin = Th(0, 0, 14, 0) };
                 RenderOptions.SetBitmapScalingMode(img, BitmapScalingMode.HighQuality);
-                var cover = SafeMode ? null : Covers.Find(g.Id);
+                var cover = NoArt ? null : Covers.Find(g.Id);
                 if (cover != null) ImageCache.Load(W.Dispatcher, cover, CoverWidth(), false, bmp => img.Source = bmp);
                 else ImageCache.LoadIcon(W.Dispatcher, g.Exe, bmp => img.Source = bmp);
                 DockPanel.SetDock(img, Dock.Left);

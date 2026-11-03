@@ -222,9 +222,11 @@
       <Grid Margin="-60">
         <Image x:Name="BgA" Stretch="UniformToFill" Opacity="0" RenderOptions.BitmapScalingMode="LowQuality">
           <Image.Effect><BlurEffect Radius="48" KernelType="Gaussian" RenderingBias="Performance"/></Image.Effect>
+          <Image.CacheMode><BitmapCache RenderAtScale="0.5"/></Image.CacheMode>
         </Image>
         <Image x:Name="BgB" Stretch="UniformToFill" Opacity="0" RenderOptions.BitmapScalingMode="LowQuality">
           <Image.Effect><BlurEffect Radius="48" KernelType="Gaussian" RenderingBias="Performance"/></Image.Effect>
+          <Image.CacheMode><BitmapCache RenderAtScale="0.5"/></Image.CacheMode>
         </Image>
       </Grid>
     </Border>

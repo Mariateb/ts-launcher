@@ -41,7 +41,7 @@ namespace TSLauncher
         StackPanel GamePanel, NowPlayingPanel, CoverPanel, StatsPanel, SetupPanel, RecentPanel, RecentHost, FilterTabs, HintLeft, HintRight;
         Image BgA, BgB;
         Grid Overlay, DlgHeaderGrid, SetupOverlay;
-        Border Dialog, DlgHeader, DlgShade, NowPlaying, DlgFooter, NoticeBar, BgCache, BgShade;
+        Border Dialog, DlgHeader, DlgShade, NowPlaying, DlgFooter, NoticeBar, BgShade;
         Image DlgIcon;
         CheckBox CustomChk, ThpracChk;
         Button ShotsBtn;
@@ -78,7 +78,7 @@ namespace TSLauncher
             StatsPanel = F<StackPanel>("StatsPanel"); SetupPanel = F<StackPanel>("SetupPanel");
             RecentPanel = F<StackPanel>("RecentPanel"); RecentHost = F<StackPanel>("RecentHost"); FilterTabs = F<StackPanel>("FilterTabs");
             HintLeft = F<StackPanel>("HintLeft"); HintRight = F<StackPanel>("HintRight");
-            BgA = F<Image>("BgA"); BgB = F<Image>("BgB"); BgCache = F<Border>("BgCache"); BgShade = F<Border>("BgShade");
+            BgA = F<Image>("BgA"); BgB = F<Image>("BgB"); BgShade = F<Border>("BgShade");
             Overlay = F<Grid>("Overlay"); DlgHeaderGrid = F<Grid>("DlgHeaderGrid"); SetupOverlay = F<Grid>("SetupOverlay");
             Dialog = F<Border>("Dialog"); DlgHeader = F<Border>("DlgHeader"); DlgShade = F<Border>("DlgShade"); NowPlaying = F<Border>("NowPlaying");
             DlgFooter = F<Border>("DlgFooter"); NoticeBar = F<Border>("NoticeBar");
@@ -356,7 +356,7 @@ namespace TSLauncher
         };
 
         string accentHex = "", accentLightHex = "#B79CFF", accentDarkHex = "#6D4FD0", baseLightHex = "#B79CFF";
-        Color accent = Col("#8B5CF6"), accentLight = Col("#B79CFF");
+        Color accent = Col("#8B5CF6");
         GradientStop bgTop, bgMid;
 
         void BuildBackground()
@@ -386,7 +386,7 @@ namespace TSLauncher
             var newHex = Hex(c);
             if (!force && newHex == accentHex) return;
             var light = Mix(c, Colors.White, 0.45);
-            accent = c; accentLight = light;
+            accent = c;
             accentHex = newHex; accentLightHex = Hex(light); accentDarkHex = Hex(Mix(c, Colors.Black, 0.25));
             W.Resources["Accent"] = new SolidColorBrush(c);
             W.Resources["AccentLight"] = new SolidColorBrush(light);
@@ -442,38 +442,76 @@ namespace TSLauncher
 
         // ---------------------------------------------------------------- self test (build check)
         /// <summary>Builds every page and every kind of card once, so a layout mistake fails the build instead of a user's start.</summary>
+        /// <summary>Covers and backgrounds are off in safe mode, except for the build's self test (which shows placeholder covers).</summary>
+        bool NoArt { get { return SafeMode && !Program.SelfTest; } }
+        List<Game> selfTestRecent;
+
         public void RunSelfTest()
         {
-            var t = new DispatcherTimer { Interval = TimeSpan.FromSeconds(4) };
+            var report = new List<string>();
+            var shots = System.IO.Path.Combine(Paths.Root, "shots");
+            var steps = new List<Action>();
+            steps.Add(() =>
+            {
+                // the build machine has no games: show a few catalog games as owned so both card kinds appear
+                foreach (var x in Lib.Unowned.Where(x => x.Id != "th09").Take(8).ToList()) { x.Unowned = false; Lib.Unowned.Remove(x); Lib.Games.Add(x); }
+                S.ShowUnowned = true; RebuildCards();
+                report.Add("cards: " + cards.Count);
+                foreach (var v in Views) { ShowView(v, true); W.UpdateLayout(); report.Add("page " + v + ": " + StatsPanel.Children.Count + " items"); }
+                ShowView("library", true);
+                selfTestRecent = Lib.Games.Concat(Lib.Unowned).Take(5).ToList();
+                UpdateContinue();
+                continueGame = selfTestRecent.FirstOrDefault();
+                var first = CardRows().Select(r => r.FirstOrDefault()).FirstOrDefault(c => c != null);
+                if (first != null) SetSelection(first);
+            });
+            steps.Add(() => { Shot(shots, "1-recent-row"); MoveSelection("Right"); });
+            steps.Add(() => { Shot(shots, "2-recent-second"); MoveSelection("Down"); });
+            steps.Add(() => { Shot(shots, "3-library-row"); MoveSelection("Right"); MoveSelection("Right"); });
+            steps.Add(() => { Shot(shots, "4-library-moved"); report.Add("keyboard selection: ok"); ShowView("settings", true); });
+            steps.Add(() => { Shot(shots, "5-settings"); ShowView("languages", true); });
+            steps.Add(() =>
+            {
+                Shot(shots, "6-languages");
+                ShowView("library", true);
+                S.Background = "none"; FollowBackground(null, true);
+                UpdateHints(); W.UpdateLayout();
+                Program.SelfTestPassed(string.Join("\r\n", report));
+            });
+            int at = 0;
+            var t = new DispatcherTimer { Interval = TimeSpan.FromSeconds(4) };   // first step once the library has loaded
             t.Tick += (s, e) =>
             {
-                t.Stop();
-                try
-                {
-                    var report = new List<string>();
-                    S.ShowUnowned = true; RebuildCards();
-                    report.Add("cards: " + cards.Count);
-                    foreach (var v in Views) { ShowView(v, true); W.UpdateLayout(); report.Add("page " + v + ": " + StatsPanel.Children.Count + " items"); }
-                    ShowView("library", true);
-                    var g = Lib.Games.Concat(Lib.Unowned).FirstOrDefault();
-                    if (g != null)
-                    {
-                        var host = new StackPanel { Orientation = Orientation.Horizontal };
-                        host.Children.Add(NewCard(g, true, true)); host.Children.Add(NewCard(g, true)); host.Children.Add(NewCard(g));
-                        RecentHost.Children.Add(host); RecentPanel.Visibility = Visibility.Visible;
-                        foreach (Border c in host.Children) { SetGlow(c, true); SetGlow(c, false); }
-                        ShowFocusCaption(g);
-                        W.UpdateLayout();
-                        report.Add("recent row tiles: ok");
-                    }
-                    if (cards.Count > 0) { MoveSelection("Right"); MoveSelection("Down"); report.Add("keyboard selection: ok"); }
-                    S.Background = "none"; FollowBackground(null, true);
-                    UpdateHints(); W.UpdateLayout();
-                    Program.SelfTestPassed(string.Join("\r\n", report));
-                }
-                catch (Exception ex) { Program.SelfTestFailed(ex); }
+                t.Interval = TimeSpan.FromMilliseconds(1200);   // then leave time for animations and covers
+                try { steps[at++](); W.UpdateLayout(); }
+                catch (Exception ex) { t.Stop(); Program.SelfTestFailed(ex); }
+                if (at >= steps.Count) t.Stop();
             };
             t.Start();
+        }
+
+        /// <summary>Saves what the window shows as a PNG (the build uploads these so the look can be checked).</summary>
+        void Shot(string dir, string name)
+        {
+            try
+            {
+                var root = (FrameworkElement)W.Content;
+                int w = (int)Math.Ceiling(root.ActualWidth), h = (int)Math.Ceiling(root.ActualHeight);
+                if (w < 1 || h < 1) return;
+                var dv = new DrawingVisual();
+                using (var dc = dv.RenderOpen())
+                {
+                    dc.DrawRectangle(W.Background, null, new Rect(0, 0, w, h));
+                    dc.DrawRectangle(new VisualBrush(root), null, new Rect(0, 0, w, h));
+                }
+                var rtb = new RenderTargetBitmap(w, h, 96, 96, PixelFormats.Pbgra32);
+                rtb.Render(dv);
+                var enc = new PngBitmapEncoder();
+                enc.Frames.Add(BitmapFrame.Create(rtb));
+                Directory.CreateDirectory(dir);
+                using (var f = File.Create(System.IO.Path.Combine(dir, name + ".png"))) enc.Save(f);
+            }
+            catch (Exception ex) { Log.Error("self test screenshot", ex); }
         }
 
         // ---------------------------------------------------------------- background picture
@@ -486,7 +524,7 @@ namespace TSLauncher
         void FollowBackground(Game g, bool immediate)
         {
             var mode = S.Background ?? "focus";
-            if (SafeMode || mode == "none") { SetBackground(null); return; }
+            if (NoArt || mode == "none") { SetBackground(null); return; }
             if (mode.StartsWith("game:"))
             {
                 var id = mode.Substring(5);
@@ -507,7 +545,7 @@ namespace TSLauncher
         void SetBackground(Game g)
         {
             string path = null;
-            if (g != null && !SafeMode) path = Covers.Find(g.Id + "_hero") ?? Covers.Find(g.Id);
+            if (g != null && !NoArt) path = Covers.Find(g.Id + "_hero") ?? Covers.Find(g.Id);
             var id = path == null ? null : g.Id;
             if (id == bgShownId) return;
             bgShownId = id;
@@ -519,7 +557,7 @@ namespace TSLauncher
                 BgShade.Visibility = Visibility.Collapsed;
                 return;
             }
-            ImageCache.Load(W.Dispatcher, path, 640, false, bmp =>
+            ImageCache.Load(W.Dispatcher, path, 480, false, bmp =>
             {
                 if (bgShownId != id) return;   // moved on while it was loading
                 var front = bgOnA ? BgB : BgA;
@@ -675,7 +713,7 @@ namespace TSLauncher
             };
             SearchBox.GotKeyboardFocus += (s, e) => SearchLine.Opacity = 1;
             SearchBox.LostKeyboardFocus += (s, e) => SearchLine.Opacity = 0.35;
-            BgCache.CacheMode = new BitmapCache();   // blur once, then reuse the result
+            // each background picture caches its own blurred image (Window.xaml), so a crossfade only changes opacity
             SortBtn.Click += (s, e) => ShowSortMenu();
             BuildFilterChips();
             HomeBtn.Click += (s, e) => ShowView("library");
