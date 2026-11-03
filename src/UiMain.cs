@@ -487,16 +487,27 @@ namespace TSLauncher
             int at = 0;
             // watchdog on its own thread: reports where it got stuck even if a window blocks the UI
             watchdog = new System.Threading.Timer(_ => Program.SelfTestFailed(new TimeoutException("stuck at step " + at + " of " + steps.Count + "; " + string.Join(" | ", report))), null, 90000, System.Threading.Timeout.Infinite);
-            // Normal priority: on a machine without a GPU, constant rendering would otherwise starve the timer
-            var t = new DispatcherTimer(DispatcherPriority.Normal) { Interval = TimeSpan.FromSeconds(4) };   // first step once the library has loaded
-            t.Tick += (s, e) =>
+            // Steps run from a plain thread: a timer on the window's thread would hide a frame loop that never ends.
+            new System.Threading.Thread(() =>
             {
-                t.Interval = TimeSpan.FromMilliseconds(1200);   // then leave time for animations and covers
-                try { report.Add("step " + (at + 1)); steps[at++](); W.UpdateLayout(); }
-                catch (Exception ex) { t.Stop(); Program.SelfTestFailed(ex); }
-                if (at >= steps.Count) t.Stop();
-            };
-            t.Start();
+                System.Threading.Thread.Sleep(4000);   // the library loads first
+                for (; at < steps.Count; )
+                {
+                    var step = steps[at];
+                    W.Dispatcher.Invoke(new Action(() =>
+                    {
+                        // every smooth scroll from the previous step must have finished by now
+                        try
+                        {
+                            if (at > 0 && smoothOn) throw new Exception("smooth scrolling still running after step " + at);
+                            report.Add("step " + (at + 1)); at++;
+                            step(); W.UpdateLayout();
+                        }
+                        catch (Exception ex) { Program.SelfTestFailed(ex); }
+                    }));
+                    System.Threading.Thread.Sleep(2500);   // animations, covers and scrolling settle
+                }
+            }) { IsBackground = true, Name = "self-test" }.Start();
         }
 
         /// <summary>Saves what the window shows as a PNG (the build uploads these so the look can be checked).</summary>
@@ -666,7 +677,7 @@ namespace TSLauncher
         }
 
         // ---------------------------------------------------------------- smooth scrolling
-        sealed class SmoothTarget { public ScrollViewer SV; public bool H; public double Target; }
+        sealed class SmoothTarget { public ScrollViewer SV; public bool H; public double Target, Started; public double? Last; public int Stuck; }
         readonly Dictionary<string, SmoothTarget> smooth = new Dictionary<string, SmoothTarget>();
         readonly Stopwatch smoothClock = Stopwatch.StartNew();
         double smoothLast;
@@ -677,7 +688,11 @@ namespace TSLauncher
             if (sv == null) return;
             double max = h ? sv.ScrollableWidth : sv.ScrollableHeight;
             target = Math.Max(0, Math.Min(max, target));
-            smooth[sv.GetHashCode() + "|" + h] = new SmoothTarget { SV = sv, H = h, Target = target };
+            SmoothTarget prev;
+            var key = sv.GetHashCode() + "|" + h;
+            // keep the start time while a scroll is retargeted, so holding an arrow key can't keep it alive forever
+            double started = smooth.TryGetValue(key, out prev) ? Math.Max(prev.Started, smoothClock.Elapsed.TotalSeconds - 1) : smoothClock.Elapsed.TotalSeconds;
+            smooth[key] = new SmoothTarget { SV = sv, H = h, Target = target, Started = started };
             if (!smoothOn) { smoothOn = true; smoothLast = smoothClock.Elapsed.TotalSeconds; CompositionTarget.Rendering += StepSmooth; }
         }
 
@@ -697,10 +712,21 @@ namespace TSLauncher
             foreach (var k in smooth.Keys.ToList())
             {
                 var a = smooth[k];
+                // A row rebuilt mid-scroll (its scroll area left the window) or content that shrank can make the
+                // target unreachable; without these checks this would run every frame forever, burning CPU.
+                if (!a.SV.IsLoaded || !a.SV.IsVisible || now - a.Started > 2) { smooth.Remove(k); continue; }
+                double max = a.H ? a.SV.ScrollableWidth : a.SV.ScrollableHeight;
+                a.Target = Math.Max(0, Math.Min(max, a.Target));
                 double cur = a.H ? a.SV.HorizontalOffset : a.SV.VerticalOffset, d = a.Target - cur;
-                double next = Math.Abs(d) < 0.5 ? a.Target : cur + d * f;
+                if (Math.Abs(d) < 0.5 || (a.Last.HasValue && Math.Abs(cur - a.Last.Value) < 0.01 && ++a.Stuck > 3))
+                {
+                    if (a.H) a.SV.ScrollToHorizontalOffset(a.Target); else a.SV.ScrollToVerticalOffset(a.Target);
+                    smooth.Remove(k);
+                    continue;
+                }
+                a.Last = cur;
+                double next = cur + d * f;
                 if (a.H) a.SV.ScrollToHorizontalOffset(next); else a.SV.ScrollToVerticalOffset(next);
-                if (Math.Abs(d) < 0.5) smooth.Remove(k);
             }
             if (smooth.Count == 0) { CompositionTarget.Rendering -= StepSmooth; smoothOn = false; }
         }
