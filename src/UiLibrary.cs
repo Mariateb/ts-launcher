@@ -216,14 +216,13 @@ namespace TSLauncher
             var color = Col(Catalog.ColorHex(g.Id));
             bool unowned = g.Unowned;
             var coverPath = SafeMode ? null : Covers.Find(g.Id);
-            var heroPath = wide && !SafeMode ? Covers.Find(g.Id + "_hero") : null;
-            bool hasArt = wide ? (heroPath != null || coverPath != null) : coverPath != null;
+            bool hasArt = coverPath != null;
             bool playing = SessionOf(g) != null;
             bool fav = S.Favorites.Contains(g.Id);
 
             var card = new Border
             {
-                Width = wide ? 620 : 200, Height = 300, CornerRadius = new CornerRadius(4), Margin = Th(5, 0, 5, 0),
+                Width = wide ? FeaturedW : 200, Height = 300, CornerRadius = new CornerRadius(4), Margin = Th(5, 0, 5, 0),
                 Cursor = Cursors.Hand, BorderThickness = Th(3, 3, 3, 3), Tag = g, ClipToBounds = false,
                 RenderTransform = new ScaleTransform(1, 1), RenderTransformOrigin = new Point(0.5, 0.5),
                 Background = Frozen(new LinearGradientBrush(color, Mix(color, Colors.Black, 0.78), 65)),
@@ -243,15 +242,11 @@ namespace TSLauncher
                 art.Source = bmp;
                 art.BeginAnimation(UIElement.OpacityProperty, new DoubleAnimation(1, new Duration(TimeSpan.FromMilliseconds(220))));
             };
-            if (wide && heroPath != null) ImageCache.Load(W.Dispatcher, heroPath, HeroTileWidth(), false, show);
-            else if (wide && coverPath != null)
+            if (wide && coverPath != null)
             {
-                // no banner: the cover on the right of a colour wash, the title on the left
-                art.HorizontalAlignment = HorizontalAlignment.Right; art.Width = 200; art.Stretch = Stretch.UniformToFill;
-                ImageCache.Load(W.Dispatcher, coverPath, CoverWidth(), false, show);
-                var wt = TB(g.Title, 26, "#FFFFFFFF", FontWeights.Bold);
-                wt.TextWrapping = TextWrapping.Wrap; wt.Margin = Th(26, 0, 230, 26); wt.VerticalAlignment = VerticalAlignment.Bottom;
-                grid.Children.Add(wt);
+                // the last game: its cover, a bit wider than the others, cropped evenly top and bottom
+                art.VerticalAlignment = VerticalAlignment.Center;
+                ImageCache.Load(W.Dispatcher, coverPath, FeaturedWidth(), false, show);
             }
             else if (coverPath != null) ImageCache.Load(W.Dispatcher, coverPath, CoverWidth(), unowned, show);
             if (!hasArt)
@@ -322,18 +317,28 @@ namespace TSLauncher
             return card;
         }
 
-        int HeroTileWidth()
+        const double FeaturedW = 260;
+
+        /// <summary>Decode width for the featured cover (it is wider than a normal card, so it needs more pixels).</summary>
+        int FeaturedWidth()
         {
-            double px = 620 * Math.Max(1.0, S.CardScale) * 1.05 * DpiScale();
-            return (int)Math.Max(640, Math.Min(2000, Math.Ceiling(px / 160) * 160));
+            double px = FeaturedW * Math.Max(1.0, S.CardScale) * 1.05 * DpiScale();
+            return (int)Math.Max(320, Math.Min(1200, Math.Ceiling(px / 80) * 80));
         }
 
         static void Scale(UIElement el, double to)
         {
             var st = (ScaleTransform)el.RenderTransform;
-            var a = new DoubleAnimation(to, new Duration(TimeSpan.FromMilliseconds(140))) { EasingFunction = new QuadraticEase() };
+            var dur = new Duration(TimeSpan.FromMilliseconds(140));
+            var a = new DoubleAnimation(to, dur) { EasingFunction = new QuadraticEase() };
             st.BeginAnimation(ScaleTransform.ScaleXProperty, a);
             st.BeginAnimation(ScaleTransform.ScaleYProperty, a);
+            // the zoomed card pushes its neighbours aside instead of overlapping them
+            var fe = el as FrameworkElement;
+            if (fe == null) return;
+            double side = 5 + (to > 1 ? fe.Width * (to - 1) / 2 + 6 : 0);
+            fe.BeginAnimation(FrameworkElement.MarginProperty, new ThicknessAnimation(new Thickness(side, 0, side, 0), dur) { EasingFunction = new QuadraticEase() });
+            Panel.SetZIndex(el, to > 1 ? 1 : 0);
         }
 
         static readonly DropShadowEffect FocusGlow = MakeFocusGlow();
@@ -400,13 +405,13 @@ namespace TSLauncher
             if (name != null)
             {
                 sh.Title = TB(name, 14, "#C9CBDA", FontWeights.Bold);
-                sh.Title.Margin = Th(29, 18, 24, 0);
+                sh.Title.Margin = Th(34, 10, 24, 0);
                 sh.Box.Children.Add(sh.Title);
             }
 
             var frame = new Grid();
             sh.Scroll = new ScrollViewer { HorizontalScrollBarVisibility = ScrollBarVisibility.Hidden, VerticalScrollBarVisibility = ScrollBarVisibility.Disabled, Focusable = false };
-            sh.Row = new StackPanel { Orientation = Orientation.Horizontal, Margin = Th(19, 14, 24, 16), LayoutTransform = cardScale };
+            sh.Row = new StackPanel { Orientation = Orientation.Horizontal, Margin = Th(32, 30, 40, 32), LayoutTransform = cardScale };
             sh.Scroll.Content = sh.Row;
             frame.Children.Add(sh.Scroll);
 
@@ -670,7 +675,7 @@ namespace TSLauncher
             if (continueGame == null || SearchBox.Text.Trim().Length > 0) { RecentPanel.Visibility = Visibility.Collapsed; return; }
 
             recentShelf = NewShelf(null);
-            recentShelf.Row.Margin = Th(19, 10, 24, 14);
+            recentShelf.Row.Margin = Th(32, 30, 40, 28);
             Border keep = null;
             for (int i = 0; i < Math.Min(8, played.Count); i++)
             {

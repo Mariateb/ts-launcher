@@ -17,7 +17,7 @@ namespace TSLauncher
     {
         public Version Version;
         public string Tag, PageUrl, ZipUrl, Notes;
-        public string VersionText { get { return Version.ToString(3); } }
+        public string VersionText { get { return AppInfo.Text(Version); } }
     }
 
     public static class Updater
@@ -35,21 +35,21 @@ namespace TSLauncher
             try { ServicePointManager.SecurityProtocol |= (SecurityProtocolType)3072; } catch { }   // TLS 1.2
         }
 
-        /// <summary>Parses "v1.2.3" / "1.2" into a Version with 3 parts.</summary>
+        /// <summary>Parses "v1.2.3.4" / "v1.2.3" / "1.2" into a Version with 4 parts.</summary>
         public static Version ParseTag(string tag)
         {
             if (string.IsNullOrEmpty(tag)) return null;
-            var m = System.Text.RegularExpressions.Regex.Match(tag, @"(\d+)(?:\.(\d+))?(?:\.(\d+))?");
+            var m = System.Text.RegularExpressions.Regex.Match(tag, @"(\d+)(?:\.(\d+))?(?:\.(\d+))?(?:\.(\d+))?");
             if (!m.Success) return null;
             Func<int, int> part = i => m.Groups[i].Success ? int.Parse(m.Groups[i].Value) : 0;
-            return new Version(part(1), part(2), part(3));
+            return new Version(part(1), part(2), part(3), part(4));
         }
 
         public static bool IsNewer(Version candidate, Version current)
         {
             if (candidate == null) return false;
-            var cur = new Version(current.Major, current.Minor, Math.Max(0, current.Build));
-            return candidate > cur;
+            Func<Version, Version> four = v => new Version(v.Major, v.Minor, Math.Max(0, v.Build), Math.Max(0, v.Revision));
+            return four(candidate) > four(current);
         }
 
         /// <summary>Returns the latest release if it is newer than this exe, else null. Never throws.</summary>
@@ -79,7 +79,7 @@ namespace TSLauncher
             foreach (var raw in md.Replace("\r", "").Split('\n'))
             {
                 var l = raw;
-                if (l.TrimStart().StartsWith("**Install:**")) break;                      // the install hint is for the web page
+                if (l.TrimStart().StartsWith("**Install:**") || l.TrimStart().StartsWith("Install:")) break;                      // the install hint is for the web page
                 l = Regex.Replace(l, @"\[([^\]]+)\]\([^)]+\)", "$1");                     // [text](url) -> text
                 l = l.Replace("**", "").Replace("__", "").Replace("`", "");
                 l = Regex.Replace(l, @"(?<![\w*])\*([^*\n]+)\*(?![\w*])", "$1");          // *italic* -> italic

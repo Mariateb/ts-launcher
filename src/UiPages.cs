@@ -452,7 +452,7 @@ namespace TSLauncher
             {
                 Title = "Games for " + Langs.Label(code), Owner = W, WindowStartupLocation = WindowStartupLocation.CenterOwner,
                 Width = 460, SizeToContent = SizeToContent.Height, MaxHeight = Math.Max(400, W.ActualHeight - 60), ResizeMode = ResizeMode.NoResize,
-                Background = Br("#191A2E"), ShowInTaskbar = false, FontFamily = new FontFamily("Segoe UI"),
+                Background = Br("#191A2E"), ShowInTaskbar = false, FontFamily = new FontFamily("Tahoma"),
             };
             var root = new DockPanel { Margin = Th(22, 18, 22, 18) };
             var head = new StackPanel();

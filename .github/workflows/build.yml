@@ -30,8 +30,10 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          $m = Select-String -Path src/Program.cs -Pattern 'AssemblyVersion\("(\d+)\.(\d+)\.(\d+)'
-          $v = "$($m.Matches[0].Groups[1].Value).$($m.Matches[0].Groups[2].Value).$($m.Matches[0].Groups[3].Value)"
+          $m = Select-String -Path src/Program.cs -Pattern 'AssemblyVersion\("(\d+)\.(\d+)\.(\d+)(?:\.(\d+))?'
+          $g = $m.Matches[0].Groups
+          $v = "$($g[1].Value).$($g[2].Value).$($g[3].Value)"
+          if ($g[4].Success -and [int]$g[4].Value -gt 0) { $v += ".$($g[4].Value)" }   # 1.3.2.1: a small fix release
           "version=$v" >> $env:GITHUB_OUTPUT
           gh release view "v$v" --repo "${{ github.repository }}" *> $null
           $exists = if ($LASTEXITCODE -eq 0) { 'true' } else { 'false' }
@@ -80,7 +82,8 @@ jobs:
           }
           $body = ($out -join "`n").Trim()
           if (-not $body) { $body = "See [CHANGELOG.md](CHANGELOG.md)." ; Write-Host "::warning::No CHANGELOG.md section for $v" }
-          $body += "`n`n**Install:** download TSLauncher.zip below and put TSLauncher.exe where the old one was. If you already have TS Launcher 1.1.0 or newer, it offers this update by itself."
+          # plain text on purpose: older launchers show these notes as-is in a Windows message box
+          $body += "`n`nInstall: download TSLauncher.zip below and put TSLauncher.exe where the old one was. If you already have TS Launcher 1.1.0 or newer, it offers this update by itself."
           Set-Content -Path release-notes.md -Value $body -Encoding UTF8
           Write-Host "---- release notes ----"; Write-Host $body
 

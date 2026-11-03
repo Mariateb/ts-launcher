@@ -13,7 +13,10 @@ namespace TSLauncher
     {
         public const string Name = "TS Launcher";
         /// <summary>From AssemblyVersion in Program.cs (the release workflow reads the same number).</summary>
-        public static readonly string Version = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version.ToString(3);
+        public static readonly string Version = Text(System.Reflection.Assembly.GetExecutingAssembly().GetName().Version);
+
+        /// <summary>"1.3.2", or "1.3.2.1" for a small fix release.</summary>
+        public static string Text(System.Version v) { return v.Revision > 0 ? v.ToString(4) : v.ToString(3); }
     }
 
     /// <summary>Everything lives next to the exe (portable). File names are kept from the old launcher.</summary>

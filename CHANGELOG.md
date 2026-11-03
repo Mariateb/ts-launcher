@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.3.2.1 — 2026-11-03
+
+Fixes for the new look.
+
+- Button hints (A Open, X Play...) only appear when a controller is connected, and the letters sit centred in their buttons.
+- The last played game uses its cover, a little wider than the other cards, instead of its banner.
+- The glow around the card you're on is no longer cut off at the edges of the row.
+- The card you're on now pushes its neighbours aside instead of slipping behind them.
+- The whole launcher uses the Tahoma font.
+- Update notes appear as plain text in the update window, without Markdown symbols.
+- Updates now understand four-part versions like this one. If you have 1.3.2, download this release by hand once; later updates are offered automatically again.
+
 ## 1.3.2 — 2026-11-03
 
 A new look, inspired by Steam's Big Picture mode. No change to how games, languages or your data work.

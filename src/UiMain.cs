@@ -572,10 +572,16 @@ namespace TSLauncher
         static FrameworkElement Hint(string glyph, string label, bool pill = false)
         {
             var sp = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(18, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
+            // the letter is drawn as a shape centred on its actual ink, so it sits exactly in the middle of the button
+            var ft = new FormattedText(glyph, System.Globalization.CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
+                new Typeface(new FontFamily("Tahoma"), FontStyles.Normal, FontWeights.Bold, FontStretches.Normal), pill ? 10 : 12, Brushes.Black);
+            var geo = ft.BuildGeometry(new Point(0, 0));
+            var bounds = geo.Bounds;
+            geo.Transform = new TranslateTransform(-bounds.X, -bounds.Y);
             var g = new Border
             {
-                MinWidth = 22, Height = 22, CornerRadius = new CornerRadius(pill ? 4 : 11), Background = Br("#E6E5F0"), Padding = new Thickness(pill ? 5 : 0, 0, pill ? 5 : 0, 0),
-                Child = new TextBlock { Text = glyph, FontSize = pill ? 10 : 12, FontWeight = FontWeights.Bold, Foreground = Br("#14151F"), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center },
+                MinWidth = 22, Height = 22, CornerRadius = new CornerRadius(pill ? 4 : 11), Background = Br("#E6E5F0"), Padding = new Thickness(pill ? 6 : 0, 0, pill ? 6 : 0, 0),
+                Child = new System.Windows.Shapes.Path { Data = geo, Fill = Br("#14151F"), Stretch = Stretch.None, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center },
             };
             sp.Children.Add(g);
             if (label.Length > 0) sp.Children.Add(new TextBlock { Text = label, FontSize = 12, FontWeight = FontWeights.SemiBold, Foreground = Br("#C9CBDA"), Margin = new Thickness(8, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center });
@@ -586,6 +592,10 @@ namespace TSLauncher
         {
             if (HintRight == null) return;
             HintLeft.Children.Clear(); HintRight.Children.Clear();
+            // button hints only make sense with a controller plugged in
+            var bar = F<Border>("HintBar");
+            if (bar != null) bar.Visibility = padIndex >= 0 ? Visibility.Visible : Visibility.Collapsed;
+            if (padIndex < 0) return;
             var lb = Hint("LB", "", true); lb.Margin = new Thickness(0);
             var rb = Hint("RB", "Switch page", true); rb.Margin = new Thickness(6, 0, 0, 0);
             HintLeft.Children.Add(lb);
@@ -855,9 +865,10 @@ namespace TSLauncher
                 // no controller: look for one every 2 seconds instead of waking up 30 times a second
                 for (int i = 0; i < 4; i++) if (Pad.Read(i, out b, out lx, out ly)) { padIndex = i; padPrev = b; break; }
                 padTimer.Interval = TimeSpan.FromMilliseconds(padIndex >= 0 ? 33 : 2000);
+                if (padIndex >= 0) UpdateHints();
                 return;
             }
-            if (!Pad.Read(padIndex, out b, out lx, out ly)) { padIndex = -1; padTimer.Interval = TimeSpan.FromMilliseconds(2000); return; }
+            if (!Pad.Read(padIndex, out b, out lx, out ly)) { padIndex = -1; padTimer.Interval = TimeSpan.FromMilliseconds(2000); UpdateHints(); return; }
             int pressed = b & ~padPrev;
             padPrev = b;
             for (int i = 0; i < PadMasks.Length; i++) if ((pressed & PadMasks[i]) != 0) Nav(PadKeys[i], false);
