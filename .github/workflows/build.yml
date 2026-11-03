@@ -71,9 +71,16 @@ jobs:
             $gfx.Dispose(); $bmp.Save("out/covers/$id.png", [System.Drawing.Imaging.ImageFormat]::Png); $bmp.Dispose()
           }
           $p = Start-Process out/TSLauncher.exe -ArgumentList '--selftest' -PassThru
-          if (-not $p.WaitForExit(120000)) { $p.Kill(); Write-Host "::error::Start-up check timed out"; exit 1 }
+          if (-not $p.WaitForExit(150000)) {
+            $p.Kill()
+            Get-ChildItem out/logs -File -ErrorAction SilentlyContinue | ForEach-Object { Write-Host "---- $($_.Name)"; Get-Content $_.FullName -Tail 60 }
+            Write-Host "::error::Start-up check timed out"; exit 1
+          }
           if (Test-Path out/selftest.txt) { Get-Content out/selftest.txt } else { Write-Host "no selftest.txt" }
-          if ($p.ExitCode -ne 0) { Write-Host "::error::Start-up check failed (exit $($p.ExitCode))"; exit 1 }
+          if ($p.ExitCode -ne 0) {
+            Get-ChildItem out/logs -File -ErrorAction SilentlyContinue | ForEach-Object { Write-Host "---- $($_.Name)"; Get-Content $_.FullName -Tail 60 }
+            Write-Host "::error::Start-up check failed (exit $($p.ExitCode))"; exit 1
+          }
           Move-Item out/shots shots -ErrorAction SilentlyContinue
           Remove-Item out/selftest.txt, out/logs, out/backups, out/covers -Recurse -Force -ErrorAction SilentlyContinue
 

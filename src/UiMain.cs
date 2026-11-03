@@ -330,7 +330,11 @@ namespace TSLauncher
             catch (Exception ex) { Log.Error(where, ex); ShowError("Something went wrong (" + where + "):\n" + ex.Message + "\n\nDetails are in the logs folder."); }
         }
 
-        void ShowError(string msg) { MessageBox.Show(W, msg, AppInfo.Name, MessageBoxButton.OK, MessageBoxImage.Error); }
+        void ShowError(string msg)
+        {
+            if (Program.SelfTest) Program.SelfTestFailed(new Exception("error message shown: " + msg));
+            MessageBox.Show(W, msg, AppInfo.Name, MessageBoxButton.OK, MessageBoxImage.Error);
+        }
         bool Confirm(string msg, string title) { return MessageBox.Show(W, msg, title, MessageBoxButton.YesNo, MessageBoxImage.Question) == MessageBoxResult.Yes; }
 
         static string Ask(string prompt, string title, string value)
@@ -445,6 +449,7 @@ namespace TSLauncher
         /// <summary>Covers and backgrounds are off in safe mode, except for the build's self test (which shows placeholder covers).</summary>
         bool NoArt { get { return SafeMode && !Program.SelfTest; } }
         List<Game> selfTestRecent;
+        System.Threading.Timer watchdog;
 
         public void RunSelfTest()
         {
@@ -479,6 +484,8 @@ namespace TSLauncher
                 Program.SelfTestPassed(string.Join("\r\n", report));
             });
             int at = 0;
+            // watchdog on its own thread: reports where it got stuck even if a window blocks the UI
+            watchdog = new System.Threading.Timer(_ => Program.SelfTestFailed(new TimeoutException("stuck at step " + at + " of " + steps.Count + "; " + string.Join(" | ", report))), null, 90000, System.Threading.Timeout.Infinite);
             var t = new DispatcherTimer { Interval = TimeSpan.FromSeconds(4) };   // first step once the library has loaded
             t.Tick += (s, e) =>
             {
