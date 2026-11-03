@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.3.3.1 — 2026-11-03
+
+- The card you're on gets a white outline with a thin dark gap around the art, like Steam, instead of the white glow that spread over the row title and was cut off.
+- The scroll arrows at the ends of a row are small round buttons. The dark panels they used to sit on showed as a box around the cards.
+- Fixed: smooth scrolling could keep running in the background forever after a row was rebuilt, using CPU and sometimes slowing the launcher down.
+- Fixed: pointing at a card with the mouse while another was selected with the keyboard left two cards highlighted. The mouse now takes over the selection, and a row scrolling under a still pointer no longer steals it.
+- The blurred background picture is cheaper to draw, so changing games is smoother on modest PCs.
+- The build now tests the start-up with sample covers and checks screenshots before each release.
+
 ## 1.3.3 — 2026-11-03
 
 The fixes from 1.3.2.1, released again as 1.3.3 so that TS Launcher 1.3.2 offers them as an update. 1.3.2 doesn't recognise four-part version numbers like 1.3.2.1.
