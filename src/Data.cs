@@ -41,6 +41,11 @@ namespace TSLauncher
         public string BackupDir;   // null = backups folder next to the exe
         /// <summary>Picture behind the library: "focus" (the game you're on), "none", or "game:thXX" (always that game).</summary>
         public string Background = "focus";
+        /// <summary>"Give me a game to play": language to launch in (null = each game's last language),
+        /// games left out of the draw, and the last pick (less likely to come up twice in a row).</summary>
+        public string RandomLang;
+        public HashSet<string> RandomExclude = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        public string LastRandom;
 
         /// <summary>When true (safe mode) nothing is ever written back to disk.</summary>
         public bool ReadOnly;
@@ -103,6 +108,10 @@ namespace TSLauncher
             s.CheckUpdates = Json.Bool(j, "CheckUpdates") ?? true;
             s.ThpracPath = Json.Str(j, "ThpracPath");
             foreach (var kv in Dict(j, "ThpracGames")) if (kv.Value is bool && (bool)kv.Value) s.ThpracGames.Add(kv.Key);
+            s.RandomLang = Json.Str(j, "RandomLang");
+            if (string.IsNullOrWhiteSpace(s.RandomLang)) s.RandomLang = null;
+            foreach (var kv in Dict(j, "RandomExclude")) if (kv.Value is bool && (bool)kv.Value) s.RandomExclude.Add(kv.Key);
+            s.LastRandom = Json.Str(j, "LastRandom");
             var bg = Json.Str(j, "Background");
             if (bg == "focus" || bg == "none" || (bg != null && bg.StartsWith("game:") && bg.Length > 5)) s.Background = bg;
             s.BackupDir = Json.Str(j, "BackupDir");
@@ -148,6 +157,9 @@ namespace TSLauncher
                     { "ThpracGames", ThpracGames.OrderBy(x => x).ToDictionary(x => x, x => true) },
                     { "BackupDir", BackupDir },
                     { "Background", Background },
+                    { "RandomLang", RandomLang },
+                    { "RandomExclude", RandomExclude.OrderBy(x => x).ToDictionary(x => x, x => true) },
+                    { "LastRandom", LastRandom },
                 };
                 if (WinWidth != null && WinHeight != null)
                     o["Window"] = new SortedDictionary<string, object>

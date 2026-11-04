@@ -205,6 +205,8 @@ namespace TSLauncher
 
             ThpracSettings();
 
+            RandomSettings();
+
             Section("Playing");
             SettingRow("Close after launch", "Hide in the system tray while you play. Play time is still counted; click the tray icon to see it.",
                 Switch(S.CloseAfterLaunch, v => { S.CloseAfterLaunch = v; S.Save(); }));
@@ -561,15 +563,17 @@ namespace TSLauncher
             Para("The filters above your games (Played, Never played, Steam, Local) narrow the library down; All shows everything again.");
 
             Section("Playing");
-            Para("Click a game to choose its language. Right-click a game to start it straight away in the language you used last time. The big banner at the top always shows your last game with a Play button.");
+            Para("Click a game to choose its language. Right-click a game to start it straight away in the language you used last time. The row at the top shows the games you played most recently, the last one first.");
+            Para("Can't decide? \"Give me a game to play\" (above your games, or R) starts a random game. The less you've played a game, the more likely it comes up, and it starts in the language you last played it in. Settings > Random game lets you pick another language and leave games out of the draw (with each game's chance shown).");
             Para("In the game window, the big Play button replays your last language and the tiles start any other one. \"Game settings mode\" makes the tiles open the game's own options program (custom.exe) instead, \"Play original\" starts the game without any patch, \"Cover…\" shows every cover and banner available so you can pick one (or use your own picture), \"Replays\" lists your replays, \"Saves\" backs up or restores your progress, and the star adds the game to your favorites.");
 
             Section("Keyboard");
             KeyRow(new[] { "←", "→" }, "Move along a row of games");
-            KeyRow(new[] { "↑", "↓" }, "Move between rows (up from the first row goes to the Play button)");
+            KeyRow(new[] { "↑", "↓" }, "Move between rows");
             KeyRow(new[] { "Enter" }, "Open the selected game. In the game window your last language is pre-selected, so Enter twice plays it.");
             KeyRow(new[] { "←", "→", "↑", "↓" }, "In the game window: move between the language tiles");
             KeyRow(new[] { "F" }, "Add / remove the selected game from your favorites");
+            KeyRow(new[] { "R" }, "Give me a game to play (Esc in the next second cancels it)");
             KeyRow(new[] { "Ctrl", "F" }, "Search");
             KeyRow(new[] { "Esc" }, "Close a window, clear the search, or come back to the library");
             KeyRow(new[] { "Wheel" }, "Scroll the page up and down");
@@ -583,7 +587,7 @@ namespace TSLauncher
             KeyRow(new[] { "B" }, "Back");
             KeyRow(new[] { "X" }, "Play the game straight away in your last language");
             KeyRow(new[] { "Y" }, "Favorite");
-            KeyRow(new[] { "LB", "RB" }, "Switch between Library, Stats, Settings and Help");
+            KeyRow(new[] { "LB", "RB" }, "Switch between Library, Languages, Stats, Settings and Help");
             KeyRow(new[] { "Start" }, "Settings");
 
             Section("Play time");

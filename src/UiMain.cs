@@ -37,7 +37,7 @@ namespace TSLauncher
         TextBlock StatusText, SearchHint, DlgSub, DlgTitle, DlgStats, LangHint, LibLabel, NoticeText, FocusTitle, FocusInfo;
         TextBox SearchBox;
         RadioButton HomeBtn, LangsBtn, StatsBtn, SettingsBtn, HelpBtn;
-        Button VanillaBtn, CoverBtn, ReplaysBtn, SavesBtn, DlgPlay, DlgFav, DlgClose, SortBtn, NoticeAction, NoticeClose;
+        Button VanillaBtn, CoverBtn, ReplaysBtn, SavesBtn, DlgPlay, DlgFav, DlgClose, SortBtn, RandomBtn, NoticeAction, NoticeClose;
         StackPanel GamePanel, NowPlayingPanel, CoverPanel, StatsPanel, SetupPanel, RecentPanel, RecentHost, FilterTabs, HintLeft, HintRight;
         Image BgA, BgB;
         Grid Overlay, DlgHeaderGrid, SetupOverlay;
@@ -72,7 +72,7 @@ namespace TSLauncher
             HomeBtn = F<RadioButton>("HomeBtn"); LangsBtn = F<RadioButton>("LangsBtn"); StatsBtn = F<RadioButton>("StatsBtn");
             SettingsBtn = F<RadioButton>("SettingsBtn"); HelpBtn = F<RadioButton>("HelpBtn");
             VanillaBtn = F<Button>("VanillaBtn"); CoverBtn = F<Button>("CoverBtn"); ReplaysBtn = F<Button>("ReplaysBtn"); SavesBtn = F<Button>("SavesBtn");
-            DlgPlay = F<Button>("DlgPlay"); DlgFav = F<Button>("DlgFav"); DlgClose = F<Button>("DlgClose"); SortBtn = F<Button>("SortBtn");
+            DlgPlay = F<Button>("DlgPlay"); DlgFav = F<Button>("DlgFav"); DlgClose = F<Button>("DlgClose"); SortBtn = F<Button>("SortBtn"); RandomBtn = F<Button>("RandomBtn");
             NoticeAction = F<Button>("NoticeAction"); NoticeClose = F<Button>("NoticeClose");
             GamePanel = F<StackPanel>("GamePanel"); NowPlayingPanel = F<StackPanel>("NowPlayingPanel"); CoverPanel = F<StackPanel>("CoverPanel");
             StatsPanel = F<StackPanel>("StatsPanel"); SetupPanel = F<StackPanel>("SetupPanel");
@@ -470,6 +470,10 @@ namespace TSLauncher
                 var first = CardRows().Select(r => r.FirstOrDefault()).FirstOrDefault(c => c != null);
                 if (first != null) SetSelection(first);
                 report.Add("first card selected");
+                var odds = RandomChances(Lib.Games);
+                if (odds.Count > 0 && Math.Abs(odds.Values.Sum() - 1) > 1e-6) throw new Exception("random chances don't add up to 100%");
+                GiveMeAGame(); CancelRandom();
+                report.Add("random game: " + RandomPool().Count + " in the draw");
             });
             steps.Add(() => { Shot(shots, "1-recent-row"); MoveSelection("Right"); });
             steps.Add(() => { Shot(shots, "2-recent-second"); MoveSelection("Down"); });
@@ -750,6 +754,7 @@ namespace TSLauncher
             SearchBox.LostKeyboardFocus += (s, e) => SearchLine.Opacity = 0.35;
             // each background picture caches its own blurred image (Window.xaml), so a crossfade only changes opacity
             SortBtn.Click += (s, e) => ShowSortMenu();
+            RandomBtn.Click += (s, e) => Safe("random game", GiveMeAGame);
             BuildFilterChips();
             HomeBtn.Click += (s, e) => ShowView("library");
             LangsBtn.Click += (s, e) => ShowView("languages");
@@ -862,6 +867,7 @@ namespace TSLauncher
                 return false;
             }
 
+            if (k == "Escape" && CancelRandom()) return true;
             if ((ctrl && k == "F") || k == "OemQuestion") { SearchBox.Focus(); SearchBox.SelectAll(); return true; }
             if (SearchBox.IsKeyboardFocused)
             {
@@ -880,6 +886,7 @@ namespace TSLauncher
                 case "Left": case "Right": case "Up": case "Down": GamePanel.Focus(); MoveSelection(k); return true;
                 case "Return": if (selCard != null) OpenCard((Game)selCard.Tag); else MoveSelection("Right"); return true;
                 case "F": if (selCard != null) { ToggleFav((Game)selCard.Tag); return true; } return false;
+                case "R": if (!ctrl) { GiveMeAGame(); return true; } return false;
                 case "PadX": if (selCard != null && !((Game)selCard.Tag).Unowned) PlayLast((Game)selCard.Tag); return true;
                 case "Escape": if (SearchBox.Text.Length > 0) SearchBox.Text = ""; else SetSelection(null); return true;
             }

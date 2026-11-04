@@ -308,6 +308,24 @@
               </StackPanel>
               <DockPanel x:Name="LibBar" Margin="24,28,28,0">
                 <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+                  <Button x:Name="RandomBtn" Margin="0,0,16,0" Cursor="Hand" FocusVisualStyle="{x:Null}"
+                          ToolTip="Starts a random game, more likely one you've played little (R). Settings > Random game to choose the language and the games.">
+                    <Button.Template>
+                      <ControlTemplate TargetType="Button">
+                        <Border x:Name="b" Background="{DynamicResource Accent}" CornerRadius="17" Padding="14,7,16,7">
+                          <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="&#xE8B1;" FontFamily="Segoe MDL2 Assets" FontSize="14" Foreground="White" VerticalAlignment="Center" Margin="0,0,9,0"/>
+                            <TextBlock Text="Give me a game to play" FontSize="13" FontWeight="Bold" Foreground="White" VerticalAlignment="Center"/>
+                          </StackPanel>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                          <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="b" Property="Background" Value="{DynamicResource AccentLight}"/></Trigger>
+                          <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="b" Property="Background" Value="{DynamicResource AccentLight}"/></Trigger>
+                          <Trigger Property="IsPressed" Value="True"><Setter TargetName="b" Property="Opacity" Value="0.8"/></Trigger>
+                        </ControlTemplate.Triggers>
+                      </ControlTemplate>
+                    </Button.Template>
+                  </Button>
                   <TextBlock x:Name="LibLabel" Foreground="#8D8FA8" FontSize="12" VerticalAlignment="Center" Margin="0,0,10,0"
                              TextTrimming="CharacterEllipsis" MaxWidth="420"/>
                   <Button x:Name="SortBtn" Style="{StaticResource TabBtn}"/>
