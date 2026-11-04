@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.4.0 — 2026-11-04
+
+- Give me a game to play: a new button above your games (or the R key) starts a random game. The less you've played a game, the more likely it comes up: its chance is 1 / (1 + hours played), so a game you've never touched is ten times as likely as one with 9 hours. The last pick is less likely to come up again right away. The game is shown for a second before it starts, and Esc cancels.
+- Settings > Random game: choose the language games start in (each game's last language, or one language for all, with the last language as a fallback for games that don't have it), and choose which games are in the draw, with each game's current chance shown.
+- Games that are already running are never picked. Games you've never started in any language are skipped, since there's no language to start them in yet.
+- Help no longer mentions the Play banner that went away in 1.3.2.
+
 ## 1.3.3.1 — 2026-11-03
 
 - The card you're on gets a white outline with a thin dark gap around the art, like Steam, instead of the white glow that spread over the row title and was cut off.

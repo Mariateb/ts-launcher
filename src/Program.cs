@@ -14,8 +14,8 @@ using WinForms = System.Windows.Forms;
 [assembly: AssemblyTitle("TS Launcher")]
 [assembly: AssemblyProduct("TS Launcher")]
 [assembly: AssemblyDescription("Game and language picker for thcrap")]
-[assembly: AssemblyVersion("1.3.3.1")]
-[assembly: AssemblyFileVersion("1.3.3.1")]
+[assembly: AssemblyVersion("1.4.0.0")]
+[assembly: AssemblyFileVersion("1.4.0.0")]
 
 namespace TSLauncher
 {

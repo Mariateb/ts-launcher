@@ -11,6 +11,7 @@ A game launcher for the Touhou Project games patched with [thcrap](https://www.t
 - **Play time tracking** that follows thcrap's loader and Steam relaunches, a "Now playing" bar, hiding in the tray while you play, a stats page with weekly charts and session history.
 - **Save backups**: `score.dat` is copied when a game starts and when it closes (last 10 versions), restorable in two clicks.
 - **Replay browser** that reads difficulty, character, result and score from Touhou 10+ replays; rename, back up, delete, import.
+- **Give me a game to play**: one button starts a random game, more likely one you've played little, in the language of your choice; leave out the games you never want picked.
 - **Favorites, sorting, search and quick filters** (played, never played, Steam, local), optional cards for the games you don't own yet.
 - **thprac support**: turn it on per game and thprac (the practice tool) attaches itself when the game starts, still through thcrap in your language.
 - **Screenshots gallery** per game: open, copy to the clipboard, show in folder, delete.
